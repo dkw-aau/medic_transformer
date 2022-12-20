@@ -1,16 +1,16 @@
 from multiprocessing import freeze_support
 
-from Evaluator import Evaluator
+from Evaluation.Evaluator import Evaluator
 from config import get_file_config, get_global_params, get_train_params, get_model_config, \
     get_optim_config
 from Model.LengthOfStay import BertForMultiLabelPrediction
 from torchmetrics.classification import BinaryPrecision
 from torchmetrics import MeanAbsoluteError
-from DataLoader.NextXVisit import NextVisit
+from DataLoader.LOSLoader import NextVisit
 from torch.utils.data import DataLoader
 from Common.common import create_folder
 from Model.utils import BertConfig
-from utils import load_corpus, load_state_dict, save_model_state
+from Common.utils import load_corpus, load_state_dict, save_model_state
 from Model import optimiser
 from tqdm import tqdm
 import torch as th

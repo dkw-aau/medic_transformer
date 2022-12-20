@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.10 (venv)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Remote Python 3.10.8 (sftp://emilrh@cs.aau.dk@rn-cs.srv.aau.dk:22/user/cs.aau.dk/an30fn/anaconda3/envs/patient_env/bin/python3.10)" project-jdk-type="Python SDK" />
 </project>

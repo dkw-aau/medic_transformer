@@ -6,9 +6,9 @@ from tqdm import tqdm
 import pickle
 import os
 
-from Corpus import Corpus
-from Sequence import Sequence
-from utils import save_corpus
+from DataModels.Corpus import Corpus
+from DataModels.Sequence import Sequence
+from Common.utils import save_corpus
 
 
 def get_is_unspecific(diagnosis):

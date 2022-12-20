@@ -1,10 +1,10 @@
 import numpy as np
 from torch.utils.data.dataset import Dataset
-from DataLoader.utils import seq_padding, code2index, position_idx, index_seg, limit_seq_length
+from DataLoader.utils import seq_padding, code2index, position_idx, limit_seq_length
 import torch as th
 
 
-class NextVisit(Dataset):
+class LOSLoader(Dataset):
     def __init__(self, token2idx, sequences, max_len):
         # dataframe preproecssing
         # filter out the patient with number of visits less than min_visit

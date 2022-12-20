@@ -1,12 +1,11 @@
 
 def get_file_config():
     return {
-        'path': r'\\srvsas9402\Platform_AN\3_Projekt_1\Innovationsprojektet\Data',
+        'data_path': '../Data',  # data folder path
         'corpus': 'corpus_small',  # vocabulary and data
         'output_path': '../Outputs',  # where to save model
         'pretrain_name': 'MLM_Model.pt',  # model name
         'finetune_name': 'Best_Model.pt',  # output model name
-        'log_file': 'log.txt',  # log path
     }
 
 

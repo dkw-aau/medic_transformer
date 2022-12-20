@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="emilrh@cs.aau.dk@rn-cs.srv.aau.dk:22" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
+      <paths name="emilrh@cs.aau.dk@rn-cs.srv.aau.dk:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/srv/data/medic_transformer" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
       <paths name="ubuntu@130.225.39.82:22">
         <serverdata>
           <mappings>
@@ -31,5 +38,6 @@
         </serverdata>
       </paths>
     </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
   </component>
 </project>

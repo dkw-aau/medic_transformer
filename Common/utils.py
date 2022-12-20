@@ -16,6 +16,7 @@ lab_names = ['Natrium', 'Albumin', 'Haemoglobin', 'Kalium', 'Calcium', 'Leukocyt
              'Trombocytter', 'Alat', 'C-Reactive Protein', 'Kreatinin', 'Bilirubin', 'Erythrocytter',
              'Karbamid', 'Nyre-eGFR', 'Neutrofilocytter']
 
+
 def save_model(save_path, model):
     model.eval()
     th.save(model.state_dict(), save_path)

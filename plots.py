@@ -1,8 +1,8 @@
 import os
 
 from tqdm import tqdm
-from utils import load_data, pickle_save
-from utils import vital_labels, lab_labels, vital_names, lab_names
+from Common.utils import load_data, pickle_save
+from Common.utils import vital_labels, lab_labels, vital_names, lab_names
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np

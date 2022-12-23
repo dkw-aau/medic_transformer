@@ -1,13 +1,12 @@
 import os
 
 from tqdm import tqdm
-from Common.utils import load_data, pickle_save
-from Common.utils import vital_labels, lab_labels, vital_names, lab_names
+from Utils.utils import load_data, pickle_save
+from Utils.utils import vital_labels, lab_labels, vital_names, lab_names
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import math
-import json
 
 
 def count_label_occurrences(data, labels, code_name, patient_wise=False):

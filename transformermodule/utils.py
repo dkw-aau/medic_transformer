@@ -48,22 +48,6 @@ def limit_seq_length(seq, max_len, apriori_len):
         return seq[-max_len + 1:]
 
 
-def index_seg(tokens, symbol='SEP'):
-    flag = 0
-    seg = []
-
-    for token in tokens:
-        if token == symbol:
-            seg.append(flag)
-            if flag == 0:
-                flag = 1
-            else:
-                flag = 0
-        else:
-            seg.append(flag)
-    return seg
-
-
 def position_idx(tokens):
     pos = [x for x in range(0, len(tokens))]
     return pos

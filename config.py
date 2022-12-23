@@ -1,49 +1,56 @@
-
-def get_file_config():
-    return {
-        'data_path': '../Data',  # data folder path
-        'corpus': 'corpus_small',  # vocabulary and data
-        'output_path': '../Outputs',  # where to save model
-        'pretrain_name': 'MLM_Model.pt',  # model name
-        'finetune_name': 'Best_Model.pt',  # output model name
-    }
+import configparser
+import os
 
 
-def get_global_params():
-    return {
-        'gradient_accumulation_steps': 1,
-        'step_eval': 5
-    }
+class Config:
+    def __init__(self, file_path, path=os.getcwd()):
+        self.seed = 42
 
+        conf = configparser.ConfigParser()
 
-def get_optim_config():
-    return {
-        'lr': 3e-5,
-        'warmup_proportion': 0.1,
-        'weight_decay': 0.01
-    }
+        try:
+            conf.read(file_path)
+        except:
+            exit("Could not read dataset module config.ini file")
 
+        self.task = conf.get('general', 'task')
 
-def get_train_params():
-    return {
-        'batch_size': 256,
-        'use_cuda': False,
-        'max_len_seq': 256,
-        'device': 'cpu'  # 'cuda:0'
-    }
+        # Data paths
+        self.path = {
+            'data_fold': path + '/Data/',
+            'out_fold': path + '/Outputs/',
+        }
 
+        # File names
+        self.corpus_name = conf.get('files', 'corpus_name')
+        self.pretrain_name = conf.get('files', 'pretrain_name')
+        self.finetune_name = conf.get('files', 'finetune_name')
 
-def get_model_config(vocab, train_params):
-    return {
-        'vocab_size': len(vocab['token2index'].keys()),  # num embeddings
-        'hidden_size': 288,  # word embedding and index embedding hidden size
-        'max_position_embedding': train_params['max_len_seq'],  # maximum number of tokens
-        'hidden_dropout_prob': 0.1,  # dropout rate
-        'num_hidden_layers': 2,  # number of multi-head attention layers required
-        'num_attention_heads': 6,  # number of attention heads
-        'attention_probs_dropout_prob': 0.1,  # multi-head attention dropout rate
-        'intermediate_size': 512,  # the size of the "intermediate" layer in the transformer encoder
-        'hidden_act': 'gelu',
-        # The non-linear activation function in the encoder and the pooler "gelu", 'relu', 'swish' are supported
-        'initializer_range': 0.02,  # parameter weight initializer range
-    }
+        if self.task == 'corpus':
+            self.prepare_parquet = conf.getboolean('extraction', 'prepare_parquet')
+            self.max_sequences = conf.getint('extraction', 'max_sequences')
+
+        elif self.task in ['pre_train', 'fine_tune']:
+
+            self.gradient_accumulation_steps = conf.getint('globals', 'gradient_accumulation_steps')
+            self.step_eval = conf.getint('globals', 'step_eval')
+
+            self.lr = conf.getfloat('optimization', 'lr')
+            self.warmup_proportion = conf.getfloat('optimization', 'warmup_proportion')
+            self.weight_decay = conf.getfloat('optimization', 'weight_decay')
+
+            self.batch_size = conf.getint('train_params', 'batch_size')
+            self.max_len_seq = conf.getint('train_params', 'max_len_seq')
+            self.use_gpu = conf.getboolean('train_params', 'use_gpu')
+
+            self.hidden_size = conf.getint('model_params', 'hidden_size')
+            self.layer_dropout = conf.getfloat('model_params', 'layer_dropout')
+            self.num_hidden_layers = conf.getint('model_params', 'num_hidden_layers')
+            self.num_attention_heads = conf.getint('model_params', 'num_attention_heads')
+            self.att_dropout = conf.getfloat('model_params', 'att_dropout')
+            self.intermediate_size = conf.getint('model_params', 'intermediate_size')
+            self.hidden_act = conf.get('model_params', 'hidden_act')
+            self.initializer_range = conf.getfloat('model_params', 'initializer_range')
+
+    def __repr__(self):
+        return f'Task: {self.task}'

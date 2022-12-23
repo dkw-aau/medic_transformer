@@ -3,12 +3,11 @@ import math
 import pandas as pd
 from datetime import timedelta
 from tqdm import tqdm
-import pickle
 import os
 
-from DataModels.Corpus import Corpus
-from DataModels.Sequence import Sequence
-from Common.utils import save_corpus
+from Utils.Corpus import Corpus
+from Utils.Sequence import Sequence
+from Utils.utils import save_corpus
 
 
 def get_is_unspecific(diagnosis):
@@ -98,7 +97,7 @@ def prepare_typed_data(group_data, patient_id, start, end, labels):
         return forloeb_data
 
 
-def prepare_patients(max_sequences, corpus_file):
+def prepare_patients(max_sequences, corpus_file, data_path):
     # Load files
     forloeb_file = 'forloeb'
     diagnosis_file = 'diagnosis'
@@ -209,13 +208,3 @@ def prepare_patients(max_sequences, corpus_file):
     corpus.create_vocabulary()
     corpus.make_corpus_df()
     save_corpus(corpus, os.path.join(data_path, corpus_file))
-
-
-if __name__ == '__main__':
-    # File paths
-    data_path = r'\\srvsas9402\Platform_AN\3_Projekt_1\Innovationsprojektet\Data'
-
-    corpus_file = 'corpus_small'
-    max_sequences = -1
-
-    prepare_patients(max_sequences, corpus_file)

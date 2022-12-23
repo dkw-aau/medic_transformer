@@ -4,18 +4,6 @@ import pickle
 import pandas as pd
 import torch as th
 
-from Common.common import create_folder
-
-vital_labels = ['RNI_TEMP', 'RNI_RESPIRATION', 'RNI_ILTSATURATION', 'RNSR_BTSYS', 'RNSR_BTDIA', 'RNI_ILTTILSKUD']
-vital_names = ['Temperature', 'Respiration Rate', 'Oxygen Saturation', 'Systolic Blood Pressure', 'Diastolic Blood Pressure', 'Oxygen Supplementation']
-
-lab_labels = ['NPU03429', 'NPU19673', 'NPU02319', 'NPU03230', 'NPU04169', 'NPU02593',
-              'NPU03568', 'NPU19651', 'NPU19748', 'NPU18016', 'NPU01370', 'NPU01944',
-              'NPU01459', 'DNK35131', 'NPU02902']
-lab_names = ['Natrium', 'Albumin', 'Haemoglobin', 'Kalium', 'Calcium', 'Leukocytter',
-             'Trombocytter', 'Alat', 'C-Reactive Protein', 'Kreatinin', 'Bilirubin', 'Erythrocytter',
-             'Karbamid', 'Nyre-eGFR', 'Neutrofilocytter']
-
 
 def save_model(save_path, model):
     model.eval()
@@ -70,3 +58,32 @@ def load_corpus(file_name):
     corpus.corpus_df = corpus_df
     corpus.unpack_corpus_df()
     return corpus
+
+
+def create_folder(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+
+def save_obj(obj, name):
+    with open(name + '.pkl', 'wb') as f:
+        pickle.dump(obj, f)
+
+
+def load_obj(name):
+    with open(name + '.pkl', 'rb') as f:
+        return pickle.load(f)
+
+
+"""def load_model(path, model):
+    # load pretrained model and update weights
+    pretrained_dict = torch.load(path, map_location='cpu')
+    model_dict = model.state_dict()
+    # 1. filter out unnecessary keys
+    pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+    # 2. overwrite entries in the existing state dict
+    model_dict.update(pretrained_dict)
+    # 3. load the new state dict
+    model.load_state_dict(model_dict)
+    return model
+"""

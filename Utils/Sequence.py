@@ -1,4 +1,4 @@
-from Tokenizer import Tokenizer
+from Utils.Tokenizer import Tokenizer
 import pandas as pd
 
 

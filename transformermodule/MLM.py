@@ -1,13 +1,11 @@
-from config import get_file_config, get_global_params, get_train_params, get_model_config, get_optim_config
 from multiprocessing import freeze_support
-from Common.common import create_folder
 from torch.utils.data import DataLoader
-from Model.MLM import BertForMaskedLM
-from DataLoader.MLMLoader import MLMLoader
-from Model.utils import BertConfig
-from Model.optimiser import adam
+from .Model.MLMModel import BertForMaskedLM
+from .DataLoader.MLMLoader import MLMLoader
+from .Model.utils import BertConfig
+from .Model.optimiser import adam
 import sklearn.metrics as skm
-from Common.utils import load_corpus, save_model_state
+from Utils.utils import load_corpus, save_model_state, create_folder
 import torch.nn as nn
 from tqdm import tqdm
 import numpy as np
@@ -15,35 +13,6 @@ import warnings
 import torch
 import time
 import os
-
-
-warnings.filterwarnings(action='ignore')
-
-# Setup parameters
-file_config = get_file_config()
-global_params = get_global_params()
-optim_config = get_optim_config()
-train_params = get_train_params()
-
-create_folder(file_config['output_path'])
-
-# Load corpus
-corpus = load_corpus(os.path.join(file_config['data_path'], file_config['corpus']))
-
-vocab = corpus.vocabulary
-train, _, _ = corpus.get_data_split()
-
-Dset = MLMLoader(train, vocab['token2index'], max_len=train_params['max_len_seq'])
-trainload = DataLoader(dataset=Dset, batch_size=train_params['batch_size'], shuffle=True, num_workers=0)
-
-model_config = get_model_config(vocab, train_params)
-
-# Create Bert Model
-conf = BertConfig(model_config)
-model = BertForMaskedLM(conf)
-
-model = model.to(train_params['device'])
-optim = adam(params=list(model.named_parameters()), config=optim_config)
 
 
 def cal_acc(label, pred):
@@ -95,8 +64,31 @@ def write_log(text):
     f.close()
 
 
-if __name__ == '__main__':
+def train_mlm(args):
     freeze_support()
+
+    warnings.filterwarnings(action='ignore')
+
+    create_folder(args.path['out_fold'])
+
+    # Load corpus
+    corpus = load_corpus(os.path.join(args.path['data_fold'], args.corpus_name))
+
+    vocab = corpus.vocabulary
+    train, _, _ = corpus.get_data_split()
+
+    Dset = MLMLoader(train, vocab['token2index'], max_len=train_params['max_len_seq'])
+    trainload = DataLoader(dataset=Dset, batch_size=train_params['batch_size'], shuffle=True, num_workers=0)
+
+    model_config = get_model_config(vocab, train_params)
+
+    # Create Bert Model
+    conf = BertConfig(model_config)
+    model = BertForMaskedLM(conf)
+
+    model = model.to(train_params['device'])
+    optim = adam(params=list(model.named_parameters()), config=optim_config)
+
     write_log('{}\t{}\t{}\n'.format('epoch', 'loss', 'time'))
     for e in range(50):
         loss, time_cost = train(e, trainload)

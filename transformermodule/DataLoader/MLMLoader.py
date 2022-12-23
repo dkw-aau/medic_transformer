@@ -1,6 +1,6 @@
 from torch.utils.data.dataset import Dataset
 import numpy as np
-from DataLoader.utils import seq_padding, position_idx, random_mask, limit_seq_length
+from transformermodule.utils import seq_padding, position_idx, random_mask, limit_seq_length
 import torch as th
 
 

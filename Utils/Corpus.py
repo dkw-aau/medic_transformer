@@ -1,13 +1,12 @@
 import copy
 import os
-import time
 import datetime
 from bisect import bisect
 from sklearn.model_selection import train_test_split
 
 import pandas as pd
 
-from Common.utils import pickle_load
+from Utils.utils import pickle_load
 
 
 class Corpus:

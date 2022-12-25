@@ -1,5 +1,5 @@
 from config import Config
-from transformermodule.MLM import train_mlm
+from transformermodule.MLM import MLMTrainer
 
 # Primary pipeline for training models on EHR sequences
 if __name__ == '__main__':
@@ -7,7 +7,8 @@ if __name__ == '__main__':
     args = Config(file_path=config_file)
 
     if args.task == 'pre_train':
-        train_mlm(args)
+        trainer = MLMTrainer(args)
+        trainer.train(args.max_epochs)
     elif args.task == 'fine_tune':
         # Do fine-tuning
         pass

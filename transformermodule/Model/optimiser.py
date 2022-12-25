@@ -1,13 +1,12 @@
 import pytorch_pretrained_bert as Bert
 
 
-def adam(params, config=None):
-    if config is None:
-        config = {
-            'lr': 3e-5,
-            'warmup_proportion': 0.1,
-            'weight_decay': 0.01
-        }
+def adam(params, args):
+    config = {
+        'lr': args.lr,
+        'warmup_proportion': args.warmup_proportion,
+        'weight_decay': args.weight_decay
+    }
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
 
     optimizer_grouped_parameters = [

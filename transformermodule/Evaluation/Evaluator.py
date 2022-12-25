@@ -37,3 +37,15 @@ class Evaluator:
     def mean_absolute_error(self, preds, labs):
         metric = MeanAbsoluteError()
         return metric(preds, labs).item()
+
+    def cal_acc(label, pred):
+        logs = nn.LogSoftmax()
+        label = label.cpu().numpy()
+        ind = np.where(label != -1)[0]
+        truepred = pred.detach().cpu().numpy()
+        truepred = truepred[ind]
+        truelabel = label[ind]
+        truepred = logs(torch.tensor(truepred))
+        outs = [np.argmax(pred_x) for pred_x in truepred.numpy()]
+        precision = skm.precision_score(truelabel, outs, average='micro')
+        return precision

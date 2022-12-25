@@ -32,16 +32,18 @@ class Config:
 
         elif self.task in ['pre_train', 'fine_tune']:
 
-            self.gradient_accumulation_steps = conf.getint('globals', 'gradient_accumulation_steps')
             self.step_eval = conf.getint('globals', 'step_eval')
 
             self.lr = conf.getfloat('optimization', 'lr')
             self.warmup_proportion = conf.getfloat('optimization', 'warmup_proportion')
             self.weight_decay = conf.getfloat('optimization', 'weight_decay')
 
+            self.max_epochs = conf.getint('train_params', 'max_epochs')
             self.batch_size = conf.getint('train_params', 'batch_size')
             self.max_len_seq = conf.getint('train_params', 'max_len_seq')
-            self.use_gpu = conf.getboolean('train_params', 'use_gpu')
+            use_gpu = conf.getboolean('train_params', 'use_gpu')
+
+            self.device = 'gpu' if use_gpu is True else 'cpu'
 
             self.hidden_size = conf.getint('model_params', 'hidden_size')
             self.layer_dropout = conf.getfloat('model_params', 'layer_dropout')

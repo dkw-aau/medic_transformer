@@ -75,3 +75,19 @@ def seq_padding(tokens, max_len, token2idx=None, symbol=None, unkown=True):
             else:
                 seq.append(token2idx.get(symbol))
     return seq
+
+
+def get_model_config(vocab, args):
+    return {
+        'vocab_size': len(vocab['token2index'].keys()),  # num embeddings
+        'hidden_size': args.hidden_size,  # word embedding and index embedding hidden size
+        'max_position_embedding': args.max_len_seq,  # maximum number of tokens
+        'hidden_dropout_prob': args.layer_dropout,  # dropout rate
+        'num_hidden_layers': args.num_hidden_layers,  # number of multi-head attention layers required
+        'num_attention_heads': args.num_attention_heads,  # number of attention heads
+        'attention_probs_dropout_prob': args.att_dropout,  # multi-head attention dropout rate
+        'intermediate_size': args.intermediate_size,  # the size of the "intermediate" layer in the transformer encoder
+        'hidden_act': args.hidden_act,
+        # The non-linear activation function in the encoder and the pooler "gelu", 'relu', 'swish' are supported
+        'initializer_range': args.initializer_range,  # parameter weight initializer range
+    }

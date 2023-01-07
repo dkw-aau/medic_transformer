@@ -8,25 +8,31 @@ class Tokenizer:
 
     def tokenize_labs(self, labs):
         if labs is not None and not labs.empty:
+            labs['token_orig'] = labs['npucode']
             labs['token'] = labs.apply(self.lab_reference_values, axis=1)
             labs.dropna(inplace=True)
-            return labs[['token', 'event_time']]
+            labs['event_value'] = labs['value']
+            return labs[['token', 'token_orig', 'event_value', 'event_time']]
         else:
             return None
 
     def tokenize_vitals(self, vitals):
         if vitals is not None and not vitals.empty:
+            vitals['token_orig'] = vitals['intervention_code']
             vitals['token'] = vitals.apply(self.vital_reference_values, axis=1)
             vitals.dropna(inplace=True)
-            return vitals[['token', 'event_time']]
+            vitals['event_value'] = vitals['value']
+            return vitals[['token', 'token_orig', 'event_value', 'event_time']]
         else:
             return None
 
     def tokenize_diagnoses(self, diagnoses):
         if diagnoses is not None and not diagnoses.empty:
             diagnoses.drop_duplicates(inplace=True)
+            diagnoses['token_orig'] = diagnoses['diakod']
             diagnoses['token'] = diagnoses['diakod']
-            return diagnoses[['token', 'event_time']]
+            diagnoses['event_value'] = 1
+            return diagnoses[['token', 'token_orig', 'event_value', 'event_time']]
         else:
             return None
 
@@ -38,7 +44,7 @@ class Tokenizer:
         prescs = [f'{name}_{"pos" if val == 1 else "neg"}' for name, val in
                   zip(names[20:34], apriori[20:34])]
         ambulance = [f'amb_{"pos" if apriori[34] == 1 else "neg"}']
-        triage_kat = [f'triage_{apriori[35]}' if apriori[35] != -1 else 'UNK']
+        triage_kat = [f'triage_{int(apriori[35])}' if int(apriori[35]) != -1 else 'UNK']
         arrival_weekend = [f'arr_weekend_{"pos" if apriori[36] == 1 else "neg"}']
         arrival_day = [f'arr_day_{apriori[37]}']
         arrival_evening = [f'arr_evening_{"pos" if apriori[38] == 1 else "neg"}']
@@ -46,8 +52,10 @@ class Tokenizer:
 
         tokens = ['CLS'] + gender + age_group + diseases + prescs + ambulance + triage_kat
         tokens = tokens + arrival_weekend + arrival_day + arrival_evening + arrival_night
+        values = [1] + apriori
+        token_orig = ['CLS'] + names
 
-        pd_apriori = pd.DataFrame({'token': tokens, 'event_time': [ed_start] * len(tokens)})
+        pd_apriori = pd.DataFrame({'token': tokens, 'token_orig': token_orig, 'event_value': values, 'event_time': [ed_start] * len(tokens)})
 
         return pd_apriori
 

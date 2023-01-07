@@ -39,13 +39,17 @@ def random_mask(tokens, token2idx):
     return tokens, output_token, output_label
 
 
-def limit_seq_length(seq, max_len, apriori_len):
-    if max_len < len(seq):
-        apriori = seq[:apriori_len]
-        rest = seq[-max_len + apriori_len:]
-        return apriori + rest
+def limit_seq_length(seq, max_len):
+    if len(seq) > max_len:
+        return seq[:max_len]
     else:
-        return seq[-max_len + 1:]
+        return seq
+
+
+def index_seg(tokens, apriori_len):
+    seg = [0] * apriori_len + [1] * (len(tokens) - apriori_len)
+
+    return seg
 
 
 def position_idx(tokens):

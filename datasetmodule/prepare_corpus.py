@@ -106,6 +106,7 @@ def prepare_patients(max_sequences, corpus_file, data_path):
     pres_file = 'luna'
 
     forloeb = pd.read_parquet(os.path.join(data_path, f'{forloeb_file}.parquet'))
+    forloeb = forloeb.sample(frac=1)
     diagnosis = pd.read_parquet(os.path.join(data_path, f'{diagnosis_file}.parquet'))
     labtests = pd.read_parquet(os.path.join(data_path, f'{labtest_file}.parquet'))
     vitals = pd.read_parquet(os.path.join(data_path, f'{vitals_file}.parquet'))
@@ -126,7 +127,8 @@ def prepare_patients(max_sequences, corpus_file, data_path):
     # For saving all forloeb
     sequence_list = []
 
-    for index, row in tqdm(forloeb.iterrows(), total=forloeb.shape[0]):
+    index = 0
+    for _, row in tqdm(forloeb.iterrows(), total=forloeb.shape[0]):
 
         # Create new forloeb
         pat_id = row['patientid']
@@ -165,7 +167,9 @@ def prepare_patients(max_sequences, corpus_file, data_path):
         mortality_30 = True if row['mortality_30'] == 1 else False
         uns_diag = get_is_unspecific(row['last_diagnosis'])
         req_hosp = True if ed_end != hosp_end else False
-        length_of_stay = (hosp_end - ed_end).total_seconds() / 60 / 60 / 24
+        ed_length_of_stay = (ed_end - ed_start).total_seconds() / 60 / 60 / 24
+        hosp_length_of_stay = (hosp_end - ed_end).total_seconds() / 60 / 60 / 24
+        length_of_stay = (hosp_end - ed_start).total_seconds() / 60 / 60 / 24
 
         # Prepare data types
         pd_lab = prepare_typed_data(labtests, pat_id, ed_start, hosp_end, ['event_time', 'npucode', 'value', 'reftext'])
@@ -183,6 +187,8 @@ def prepare_patients(max_sequences, corpus_file, data_path):
             ed_start,
             ed_end,
             hosp_end,
+            ed_length_of_stay,
+            hosp_length_of_stay,
             length_of_stay,
             mortality_30,
             req_hosp,
@@ -202,6 +208,8 @@ def prepare_patients(max_sequences, corpus_file, data_path):
 
         if index == max_sequences:
             break
+        else:
+            index += 1
 
     print('Creating and saving Corpus')
     corpus = Corpus(data_path, sequence_list)

@@ -42,8 +42,9 @@ class Config:
             self.batch_size = conf.getint('train_params', 'batch_size')
             self.max_len_seq = conf.getint('train_params', 'max_len_seq')
             use_gpu = conf.getboolean('train_params', 'use_gpu')
+            self.use_pretrained = conf.getboolean('train_params', 'use_pretrained')
 
-            self.device = 'gpu' if use_gpu is True else 'cpu'
+            self.device = 'cuda' if use_gpu is True else 'cpu'
 
             self.hidden_size = conf.getint('model_params', 'hidden_size')
             self.layer_dropout = conf.getfloat('model_params', 'layer_dropout')
@@ -53,6 +54,14 @@ class Config:
             self.intermediate_size = conf.getint('model_params', 'intermediate_size')
             self.hidden_act = conf.get('model_params', 'hidden_act')
             self.initializer_range = conf.getfloat('model_params', 'initializer_range')
+
+        elif self.task == 'baseline':
+            self.hours = conf.getint('baseline', 'hours')
+            self.strategy = conf.get('baseline', 'strategy')
+            self.imputation = conf.get('baseline', 'imputation')
+            self.scaler = conf.get('baseline', 'scaler')
+            self.task = conf.get('baseline', 'task')
+            self.cls = conf.get('baseline', 'cls')
 
     def __repr__(self):
         return f'Task: {self.task}'

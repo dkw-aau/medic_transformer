@@ -8,23 +8,35 @@ class BertEmbeddings(nn.Module):
     """Construct the embeddings from word, segment, age
     """
 
-    def __init__(self, config):
+    def __init__(self, config, feature_dict=None):
         super(BertEmbeddings, self).__init__()
-        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
-        self.posi_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size). \
-            from_pretrained(embeddings=self._init_posi_embedding(config.max_position_embeddings, config.hidden_size))
+        self.feature_dict = feature_dict
+
+        if feature_dict['word']:
+            self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
+
+        if feature_dict['seg']:
+            self.segment_embeddings = nn.Embedding(2, config.hidden_size)
+
+        if feature_dict['position']:
+            self.posi_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size). \
+                from_pretrained(
+                embeddings=self._init_posi_embedding(config.max_position_embeddings, config.hidden_size))
 
         self.LayerNorm = Bert.modeling.BertLayerNorm(config.hidden_size, eps=1e-12)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def forward(self, word_ids, posi_ids=None):
-        if posi_ids is None:
-            posi_ids = torch.zeros_like(word_ids)
+    def forward(self, word_ids, seg_ids, posi_ids=None):
+        embeddings = self.word_embeddings(word_ids)
 
-        word_embed = self.word_embeddings(word_ids)
-        posi_embeddings = self.posi_embeddings(posi_ids)
+        if self.feature_dict['position']:
+            posi_embeddings = self.posi_embeddings(posi_ids)
+            embeddings = embeddings + posi_embeddings
 
-        embeddings = word_embed + posi_embeddings
+        if self.feature_dict['seg']:
+            segment_embed = self.segment_embeddings(seg_ids)
+            embeddings = embeddings + segment_embed
+
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
         return embeddings
@@ -53,14 +65,14 @@ class BertEmbeddings(nn.Module):
 
 
 class BertModel(Bert.modeling.BertPreTrainedModel):
-    def __init__(self, config):
+    def __init__(self, config, feature_dict):
         super(BertModel, self).__init__(config)
-        self.embeddings = BertEmbeddings(config=config)
+        self.embeddings = BertEmbeddings(config=config, feature_dict=feature_dict)
         self.encoder = Bert.modeling.BertEncoder(config=config)
         self.pooler = Bert.modeling.BertPooler(config)
         self.apply(self.init_bert_weights)
 
-    def forward(self, input_ids, posi_ids=None, attention_mask=None,
+    def forward(self, input_ids, seg_ids, posi_ids=None, attention_mask=None,
                 output_all_encoded_layers=True):
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
@@ -82,7 +94,7 @@ class BertModel(Bert.modeling.BertPreTrainedModel):
         extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
-        embedding_output = self.embeddings(input_ids, posi_ids)
+        embedding_output = self.embeddings(input_ids, seg_ids, posi_ids)
         encoded_layers = self.encoder(embedding_output,
                                       extended_attention_mask,
                                       output_all_encoded_layers=output_all_encoded_layers)
@@ -94,14 +106,14 @@ class BertModel(Bert.modeling.BertPreTrainedModel):
 
 
 class BertForMaskedLM(Bert.modeling.BertPreTrainedModel):
-    def __init__(self, config):
+    def __init__(self, config, feature_dict):
         super(BertForMaskedLM, self).__init__(config)
-        self.bert = BertModel(config)
+        self.bert = BertModel(config, feature_dict)
         self.cls = Bert.modeling.BertOnlyMLMHead(config, self.bert.embeddings.word_embeddings.weight)
         self.apply(self.init_bert_weights)
 
-    def forward(self, input_ids, posi_ids=None, attention_mask=None, masked_lm_labels=None):
-        sequence_output, _ = self.bert(input_ids, posi_ids, attention_mask, output_all_encoded_layers=False)
+    def forward(self, input_ids, posi_ids=None, seg_ids=None, attention_mask=None, masked_lm_labels=None):
+        sequence_output, _ = self.bert(input_ids, seg_ids, posi_ids, attention_mask, output_all_encoded_layers=False)
         prediction_scores = self.cls(sequence_output)
 
         if masked_lm_labels is not None:

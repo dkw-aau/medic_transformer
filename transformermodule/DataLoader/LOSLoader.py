@@ -1,7 +1,7 @@
 import numpy as np
 from bisect import bisect
 from torch.utils.data.dataset import Dataset
-from transformermodule.utils import seq_padding, code2index, position_idx, limit_seq_length, index_seg
+from transformermodule.utils import seq_padding, code2index, limit_seq_length, index_seg
 import torch as th
 
 

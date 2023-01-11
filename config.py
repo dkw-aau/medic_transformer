@@ -1,4 +1,5 @@
 import configparser
+from decouple import config as get_env
 import os
 
 
@@ -23,14 +24,21 @@ class Config:
 
         # File names
         self.corpus_name = conf.get('files', 'corpus_name')
+        self.history_name = conf.get('files', 'history_name')
         self.pretrain_name = conf.get('files', 'pretrain_name')
         self.finetune_name = conf.get('files', 'finetune_name')
+
+        # Read Logger Arguments
+        self.use_logging = conf.getboolean('neptune', 'use_logging', fallback=None)
+        self.neptune_project_id = conf.get('neptune', 'neptune_project_id', fallback=None)
+        self.neptune_token_key = conf.get('neptune', 'neptune_token_key', fallback=None)
+        self.neptune_api_token = get_env(self.neptune_token_key) if self.neptune_token_key is not None else None
 
         if self.task == 'corpus':
             self.prepare_parquet = conf.getboolean('extraction', 'prepare_parquet')
             self.max_sequences = conf.getint('extraction', 'max_sequences')
 
-        elif self.task in ['pre_train', 'fine_tune']:
+        elif self.task in ['history', 'pre_train', 'fine_tune']:
 
             self.step_eval = conf.getint('globals', 'step_eval')
 
@@ -62,6 +70,7 @@ class Config:
             self.scaler = conf.get('baseline', 'scaler')
             self.task = conf.get('baseline', 'task')
             self.cls = conf.get('baseline', 'cls')
+            self.use_saved = conf.getboolean('baseline', 'use_saved')
 
     def __repr__(self):
         return f'Task: {self.task}'

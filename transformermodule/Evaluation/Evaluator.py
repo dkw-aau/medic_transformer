@@ -1,9 +1,11 @@
 from torchmetrics.classification import BinaryPrecision, BinaryF1Score, BinaryAccuracy, MulticlassAccuracy
+from sklearn.metrics import confusion_matrix
 from torchmetrics import MeanAbsoluteError
 from sklearn.metrics import precision_score, accuracy_score, f1_score
 from sklearn.dummy import DummyClassifier
 import random
 import torch as th
+
 
 class Evaluator:
     def __init__(
@@ -67,6 +69,9 @@ class Evaluator:
         cls1_f1 = f1_score(labels, [1] * len(labels))
         cls2_f1 = f1_score(labels, [0] * len(labels))
         return max(cls1_f1, cls2_f1)
+
+    def confusion_matrix(self, preds, labs):
+        return confusion_matrix(labs['los_category'].squeeze().cpu().numpy(), th.argmax(preds['los_category'], dim=1).cpu().numpy())
 
     def get_loader_labels(self, loader, task):
         if task in ['los_binary', 'los_category']:

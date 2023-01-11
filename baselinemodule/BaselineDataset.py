@@ -25,25 +25,32 @@ class BaselineDataset:
         self.tokens = None
         self.data_x = []
         self.data_y = []
+
         # Get distinct token types
+        print("Getting distinct tokens")
         self.get_distinct_orig_tokens()
 
+        print('Grouping sequences by tokens')
         # Group values by token types
         self.group_sequence_values()
 
-        # Based on sequence strategy and imputation technique
         # Extract samples from sequences
+        print('Extracting samples from sequences')
         self.extract_samples()
 
         # Split samples
+        print('Splitting data into train and test')
         train_x, test_x, train_y, test_y = self.split_train_test(train_size=0.8)
 
         # Do data imputation
+        print('Imputing missing values')
         train_x, test_x = self.impute_samples(train_x, test_x)
 
         # Scale data
+        print('Scaling the data')
         self.train_x, self.test_x = self.scale(train_x, test_x)
 
+        print('Setting up label task')
         self.train_y, self.test_y = self.setup_label_task(train_y, test_y)
 
     def setup_label_task(self, train_y, test_y):

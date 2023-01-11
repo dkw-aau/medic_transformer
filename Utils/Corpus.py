@@ -1,11 +1,9 @@
 import copy
 import os
 import datetime
-from bisect import bisect
-from sklearn.model_selection import train_test_split
-
+import random
+import numpy as np
 import pandas as pd
-
 from Utils.utils import pickle_load
 
 
@@ -15,6 +13,9 @@ class Corpus:
         self.corpus_df = None
         self.vocabulary = None
         self.time_format = '%Y-%m-%d %H:%M:%S'
+        self.train_idx = None
+        self.eval_idx = None
+        self.test_idx = None
 
         if sequences:
             self.sequences = sequences
@@ -97,14 +98,11 @@ class Corpus:
         for seq in self.sequences:
             seq.cut_by_hours(hours)
 
-    def substract_los_hours(self, hours):
-        for seq in self.sequences:
-            seq.length_of_stay = (seq.length_of_stay * 24 - hours) / 24
-
     def cut_sequences_by_apriori(self):
         for seq in self.sequences:
             seq.event_times = seq.event_times[0:seq.apriori_len]
             seq.event_tokens = seq.event_tokens[0:seq.apriori_len]
+            seq.event_values = seq.event_values[0:seq.apriori_len]
 
     def get_subset_by_uns_diag(self):
         new_corpus = copy.deepcopy(self)
@@ -145,6 +143,50 @@ class Corpus:
 
         return new_corpus
 
+    def get_subset_corpus(self, min_hours):
+        new_corpus = copy.deepcopy(self)
+        sequences = self.sequences.copy()
+        train, test, evals = [], [], []
+
+        for index in self.train_idx:
+            seq = sequences[index]
+            if seq.length_of_stay * 24 >= min_hours:
+                # Cut sequence to min_hours of data
+                seq.cut_by_hours(min_hours)
+                # subtract min_hours from the los
+                seq.length_of_stay = (seq.length_of_stay * 24 - min_hours) / 24
+                train.append(sequences[index])
+
+        for index in self.eval_idx:
+            seq = sequences[index]
+            if seq.length_of_stay * 24 >= min_hours:
+                # Cut sequence to min_hours of data
+                seq.cut_by_hours(min_hours)
+                # subtract min_hours from the los
+                seq.length_of_stay = (seq.length_of_stay * 24 - min_hours) / 24
+                evals.append(sequences[index])
+
+        for index in self.test_idx:
+            seq = sequences[index]
+            if seq.length_of_stay * 24 >= min_hours:
+                # Cut sequence to min_hours of data
+                seq.cut_by_hours(min_hours)
+                # subtract min_hours from the los
+                seq.length_of_stay = (seq.length_of_stay * 24 - min_hours) / 24
+                test.append(sequences[index])
+
+        new_sequences = train + evals + test
+        train_idx = list(range(0, len(train)))
+        eval_idx = list(range(len(train), len(train) + len(evals)))
+        test_idx = list(range(len(train) + len(evals), len(train) + len(evals) + len(test)))
+
+        new_corpus.sequences = new_sequences
+        new_corpus.train_idx = train_idx
+        new_corpus.eval_idx = eval_idx
+        new_corpus.test_idx = test_idx
+
+        return new_corpus
+
     def get_subset_by_min_hours(self, min_hours):
         new_corpus = copy.deepcopy(self)
         sequences = self.sequences.copy()
@@ -158,12 +200,38 @@ class Corpus:
 
         return new_corpus
 
-    def split_train_test(self, train_size=0.8):
-        train, test = train_test_split(self.sequences, test_size=1 - train_size, random_state=42)
-        return train, test
+    def create_train_test_idx(self, train_size=0.8):
+        # Indexes for examples
+        indexes = list(range(0, len(self.sequences)))
 
-    def split_train_eval_test(self, train_size):
-        train, eval = train_test_split(self.sequences, test_size=1 - train_size, random_state=42)
-        eval, test = train_test_split(eval, test_size=0.5, random_state=42)
+        # Randomize examples
+        random.shuffle(indexes)
 
-        return train, eval, test
+        train_size = int(len(indexes) * train_size)
+        self.train_idx = indexes[0:train_size]
+        self.test_idx = indexes[train_size:]
+
+    def create_train_evel_test_idx(self, train_size=0.8):
+        # Indexes for examples
+        indexes = list(range(0, len(self.sequences)))
+
+        # Randomize examples
+        random.shuffle(indexes)
+
+        train_len = int(len(indexes) * train_size)
+        eval_len = int(len(indexes) * (1 - train_size) / 2)
+        self.train_idx = indexes[0:train_len]
+        self.eval_idx = indexes[train_len: eval_len + train_len]
+        self.test_idx = indexes[train_len + eval_len:]
+
+    def split_train_eval_test(self):
+        train = list(np.array(self.sequences)[self.train_idx])
+        evalu = list(np.array(self.sequences)[self.eval_idx])
+        test = list(np.array(self.sequences)[self.test_idx])
+        print(f'Length of data split {len(train)}/{len(evalu)}/{len(test)}')
+
+        return train, evalu, test
+
+    def randomize_sequences(self):
+        for sequence in self.sequences:
+            random.shuffle(sequence.event_tokens)

@@ -19,9 +19,11 @@ class BertEmbeddings(nn.Module):
 
         if feature_dict['word']:
             self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
+            nn.init.xavier_uniform_(self.word_embeddings.weight)
 
         if feature_dict['seg']:
             self.segment_embeddings = nn.Embedding(2, config.hidden_size)
+            nn.init.xavier_uniform_(self.segment_embeddings.weight)
 
         if feature_dict['position']:
             self.posi_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size). \
@@ -106,7 +108,7 @@ class BertModel(Bert.modeling.BertPreTrainedModel):
 
 
 class BertForMultiLabelPrediction(Bert.modeling.BertPreTrainedModel):
-    def __init__(self, args, config, feature_dict, cls_heads, cls_config=None):
+    def __init__(self, args, config, feature_dict, cls_heads, cls_config=None, class_weights=None):
         super(BertForMultiLabelPrediction, self).__init__(config)
         self.cls_heads = cls_heads
         self.bert = BertModel(config, feature_dict)
@@ -118,6 +120,8 @@ class BertForMultiLabelPrediction(Bert.modeling.BertPreTrainedModel):
             self.los_real = nn.Linear(config.hidden_size, 1)
         if 'los_category' in cls_heads:
             self.los_category = nn.Linear(config.hidden_size, len(cls_config['classes']) + 1)
+            nn.init.xavier_uniform_(self.los_category.weight)
+            nn.init.zeros_(self.los_category.bias)
         if 'req_hosp' in cls_heads:
             self.req_hosp = nn.Linear(config.hidden_size, 1)
         if 'mortality_30' in cls_heads:
@@ -128,11 +132,7 @@ class BertForMultiLabelPrediction(Bert.modeling.BertPreTrainedModel):
         self.sigmoid = nn.Sigmoid()
         self.bce_loss = nn.BCELoss()
         self.l1_loss = nn.L1Loss()
-        self.ce_loss = nn.CrossEntropyLoss()
-
-        # Initialize model parameters
-        if args.use_pretrained:
-            load_state_dict(os.path.join(args.path['out_fold'], args.pretrain_name), self)
+        self.ce_loss = nn.CrossEntropyLoss(weight=class_weights)
 
     def forward(self, input_ids, posi_ids=None, seg_ids=None, targets=None, attention_mask=None):
         # Bert part of the model
@@ -155,14 +155,6 @@ class BertForMultiLabelPrediction(Bert.modeling.BertPreTrainedModel):
             out = self.los_category(logits)  # CrossEntropyLoss()
             loss = self.add_loss(self.ce_loss(out, targets['los_category'].squeeze()), loss)
             outputs['los_category'] = out
-        if 'req_hosp' in self.cls_heads:
-            out = self.sigmoid(self.req_hosp(logits))  # BCELoss
-            loss = self.add_loss(self.bce_loss(out.view(-1, 1), targets['hosp'].view(-1, 1)), loss)
-            outputs['hosp'] = out
-        if 'mortality_30' in self.cls_heads:
-            out = self.sigmoid(self.mortality_30(logits))  # BCELoss
-            loss = self.add_loss(self.bce_loss(out.view(-1, 1), targets['m30'].view(-1, 1)), loss)
-            outputs['m30'] = out
 
         return loss, outputs
 

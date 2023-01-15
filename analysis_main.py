@@ -1,11 +1,23 @@
 import os
+import time
 from bisect import bisect
-
+import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 from Utils.utils import load_corpus
 from config import Config
 import matplotlib.dates as mdates
+
+
+def time_names():
+    data = [(1588540440, 'A06A'), (1588545949, 'ilt_low'), (1588545949, 'respiration_normal'), (1588545949, 'temp_normal'), (1588545949, 'puls_normal'), (1588554900, 'ZZ7098'), (1588558300, 'temp_normal'), (1588558300, 'ilt_low'), (1588564920, 'respiration_normal'), (1588564920, 'temp_normal'), (1588573080, 'NPU02319_low'), (1588573080, 'NPU02840_normal'), (1588575141, 'NPU01370_low'), (1588588601, 'NPU03230_low'), (1588595400, 'respiration_normal'), (1588595400, 'puls_normal'), (1588595400, 'ilttilskud_normal'), (1588595400, 'ilt_low'), (1588595400, 'temp_normal')]
+    new_times = []
+    for x in [x[0] for x in data]:
+        new_times.append(datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=x))
+    new_names = [y for x, y in data]
+    print(data)
+
+    return new_times, new_names
 
 
 def length_og_stay_plot(corpus, bins, cutoff_days, file_name='los_bins'):
@@ -50,7 +62,7 @@ def hist_seq_len(corpus, bins, cutoff_len, file_name='seq_len'):
     print(f'Smallest and largest sequences: {min(inliers)} - {max(inliers)}')
     print(f'{len(inliers)} inliers')
     print(f'{len(outliers)} outliers')
-    print(f'Mean sequence length of inliers: {sum(inliers) / len(inliers)}')
+    print(f'Mean sequence length of inliers: {sum(inliers) / len(inliers)}\n')
 
     fig, axs = plt.subplots(1, 1)
     axs.hist(inliers, bins=bins)
@@ -90,7 +102,7 @@ def apriori_distribution(corpus):
     pass
 
 
-def token_type_time_dist(corpus, file_name='tok_typ_dist'):
+def token_type_time_dist(corpus, file_name='tok_typ_dist', event_types=None):
     year_dict = {}
     year_type_dict = {}
 
@@ -103,7 +115,6 @@ def token_type_time_dist(corpus, file_name='tok_typ_dist'):
 
     sorted_year_dict = dict(sorted(year_dict.items()))
 
-    event_types = ['diag', 'lab', 'vital', 'apriori']
     for year, sequences in year_dict.items():
         year_type_dict[year] = {}
         for type in event_types:
@@ -141,8 +152,7 @@ def token_type_time_dist(corpus, file_name='tok_typ_dist'):
     plt.savefig(f'{args.path["out_fold"]}/{file_name}.png')
 
 
-def type_distribution(corpus, file_name=f'event_type_dist'):
-    event_types = ['diag', 'lab', 'vital', 'apriori']
+def type_distribution(corpus, file_name=f'event_type_dist', event_types=None):
     event_type_counts = {event: 0 for event in event_types}
     for sequence in corpus.sequences:
         for event_type in event_types:
@@ -159,14 +169,44 @@ def type_distribution(corpus, file_name=f'event_type_dist'):
     plt.savefig(f'{args.path["out_fold"]}/{file_name}.png')
 
 
-def position_distribution(corpus, file_name='pos_dist'):
-    event_types = ['diag', 'lab', 'vital', 'apriori']
+def distinct_token_types(corpus, file_name=f'distinct_token_types', event_types=None):
+    event_types_distinct = {event: 0 for event in event_types}
     event_type_counts = {event: 0 for event in event_types}
-    for sequence in corpus.sequences:
+    event_tokens_distinct = {event: [] for event in event_types}
+
+    for event in event_types:
+        token_set = set()
+        for seq in corpus.sequences:
+            event_type_tokens = [t_val for t_val, t_type in zip(seq.event_tokens, seq.event_types) if t_type == event]
+            token_set.update(set(event_type_tokens))
+            event_type_counts[event] += len(event_type_tokens)
+        event_tokens_distinct[event] = token_set
+        event_types_distinct[event] = len(token_set)
+
+    fig, axs = plt.subplots()
+    axs.bar(event_types, event_types_distinct.values())
+
+    print('Token types and their distinct token counts')
+    print(f'{event_types_distinct}')
+    print('Token types and their total token counts')
+    print(f'{event_type_counts}\n')
+    #for key, value in event_tokens_distinct.items():
+    #    print(key, value)
+
+    axs.set_title('Token Types and their Distinct Concepts')
+    axs.set_ylabel(f'Count Distinct Concepts')
+    axs.set_xlabel('Token Types')
+
+    plt.savefig(f'{args.path["out_fold"]}/{file_name}.png')
+
+
+def position_distribution(corpus, file_name='pos_dist', event_types=None):
+    event_type_counts = {event: 0 for event in event_types}
+    for seq in corpus.sequences:
         tmp_event_pos = -1
-        for i, event_pos in enumerate(sequence.event_pos_ids):
+        for i, event_pos in enumerate(seq.event_pos_ids):
             if tmp_event_pos != event_pos:
-                event_type_counts[sequence.event_types[i]] += 1
+                event_type_counts[seq.event_types[i]] += 1
                 tmp_event_pos = event_pos
 
     counts = [event_count / len(corpus.sequences) for event_count in event_type_counts.values()]
@@ -180,9 +220,10 @@ def position_distribution(corpus, file_name='pos_dist'):
     plt.savefig(f'{args.path["out_fold"]}/{file_name}.png')
 
 
-def plot_sequence(corpus, seq_num):
-    names = corpus.sequences[seq_num].event_tokens[41:]
-    dates = corpus.sequences[seq_num].event_times[41:]
+def plot_sequence(corpus, seq_num, names=None, dates=None):
+    if names is None or dates is None:
+        names = corpus.sequences[seq_num].event_tokens[41:]
+        dates = corpus.sequences[seq_num].event_times[41:]
 
     # Choose some nice levels
     levels = np.tile([-5, 5, -3, 3, -1, 1],
@@ -190,7 +231,7 @@ def plot_sequence(corpus, seq_num):
 
     # Create figure and plot a stem plot with the date
     fig, ax = plt.subplots(figsize=(8.8, 4), constrained_layout=True)
-    ax.set(title='Patient sequence ecents')
+    ax.set(title='Event Sequence')
 
     markerline, stemline, baseline = ax.stem(dates, levels,
                                              linefmt="C3-", basefmt="k-",
@@ -209,7 +250,7 @@ def plot_sequence(corpus, seq_num):
 
     # format xaxis with 1 hour intervals
     ax.get_xaxis().set_major_locator(mdates.HourLocator(interval=4))
-    ax.get_xaxis().set_major_formatter(mdates.DateFormatter("%a %d - %H:%M"))
+    ax.get_xaxis().set_major_formatter(mdates.DateFormatter("%H:%M"))  # "%a %d - %H:%M"
     plt.setp(ax.get_xticklabels(), rotation=30, ha="right")
 
     # remove y axis and spines
@@ -229,48 +270,54 @@ if __name__ == '__main__':
         file_path=config_file
     )
 
-    # Load Corpus and subset corpus
+    # Load Corpus
+    conf = {
+        'task': 'binary',
+        'metric': 'acc',
+        'binary_thresh': 2,
+        'cats': [1, 7],
+        'years': [2018, 2019, 2020, 2021],
+        'types': ['apriori', 'adm', 'proc', 'lab', 'vital', 'diag'],
+        'max_hours': 24
+    }
+
+    # Load corpus
     corpus = load_corpus(os.path.join(args.path['data_fold'], args.corpus_name))
-    print(len(corpus.sequences))
-    # Select subset corpus
-    min_hours = 24
-    cut_corpus = corpus.get_subset_by_min_hours(min_hours=min_hours)
-    cut_corpus.cut_sequences_by_hours(hours=min_hours)
-    cut_corpus.substract_los_hours(hours=min_hours)
+    corpus.prepare_corpus(
+        conf
+    )
+    corpus.create_pos_ids(event_dist=60)
+
+    # Plot a sequence
+    #dates, tokens = time_names()
+    #plot_sequence(corpus, 0, tokens, dates)
+
+
 
     # Length of stay
-    length_og_stay_plot(corpus, bins=50, cutoff_days=14)
-    length_og_stay_category_plot(corpus, categories=[1, 2, 3, 4, 5, 6, 7, 14])
-
-    # Length of stay
-    length_og_stay_plot(cut_corpus, bins=50, cutoff_days=14, file_name=f'los_bins_{min_hours}')
-    length_og_stay_category_plot(cut_corpus, categories=[1, 2, 3, 4, 5, 6, 7, 14], file_name=f'los_cat_{min_hours}')
+    length_og_stay_plot(corpus, bins=50, cutoff_days=14, file_name=f'los_bins_{conf["max_hours"]}')
+    length_og_stay_category_plot(corpus, categories=[1, 2, 3, 4, 5, 6, 7, 14], file_name=f'los_cat_{conf["max_hours"]}_hours')
 
     # Sequence lengths
-    hist_seq_len(corpus, bins=50, cutoff_len=256, file_name='seq_len')
-    hist_seq_len(cut_corpus, bins=50, cutoff_len=256, file_name=f'seq_len_{min_hours}')
+    hist_seq_len(corpus, bins=50, cutoff_len=256, file_name=f'seq_len_{conf["max_hours"]}')
 
     # Token distribution
     token_distribution(corpus, bins=200, cutoff_min=0, cutoff_max=20000, file_name='token_dist_all')
-    token_distribution(cut_corpus, bins=200, cutoff_min=10, cutoff_max=20000, file_name='token_dist_min_10')
+
+    distinct_token_types(corpus, file_name=f'distinct_token_types_{conf["max_hours"]}', event_types=conf["types"])
 
     # TODO: Investigate Apriori
     # Are there any apriori concepts that are not seen 200 times?
+
     apriori_distribution(corpus)
 
     # Token type distribution over time
-    token_type_time_dist(corpus, file_name='tok_typ_dist')
-    token_type_time_dist(cut_corpus, file_name=f'tok_typ_dist_{min_hours}')
-
-    # Plot a sequence
-    # plot_sequence(corpus, 3)
+    token_type_time_dist(corpus, file_name=f'tok_typ_dist_{conf["max_hours"]}', event_types=conf["types"])
 
     # Token type distribution plot
-    type_distribution(corpus, file_name='event_type_dist')
-    type_distribution(cut_corpus, file_name=f'event_type_dist_{min_hours}')
+    type_distribution(corpus, file_name=f'event_type_dist_{conf["max_hours"]}', event_types=conf["types"])
 
-    position_distribution(corpus, file_name='pos_dist')
-    position_distribution(cut_corpus, file_name=f'pos_dist_{min_hours}')
+    position_distribution(corpus, file_name=f'pos_dist_{conf["max_hours"]}', event_types=conf["types"])
     exit()
 
     # TODO: Analyze the Aleatoric uncertainty of the problem by finding similar looking sequences

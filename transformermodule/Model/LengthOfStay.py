@@ -25,6 +25,14 @@ class BertEmbeddings(nn.Module):
             self.segment_embeddings = nn.Embedding(2, config.hidden_size)
             nn.init.xavier_uniform_(self.segment_embeddings.weight)
 
+        if feature_dict['age']:
+            self.age_embeddings = nn.Embedding(120, config.hidden_size)
+            nn.init.xavier_uniform_(self.age_embeddings.weight)
+
+        if feature_dict['gender']:
+            self.gender_embeddings = nn.Embedding(2, config.hidden_size)
+            nn.init.xavier_uniform_(self.gender_embeddings.weight)
+
         if feature_dict['position']:
             self.posi_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size). \
             from_pretrained(embeddings=self._init_posi_embedding(config.max_position_embeddings, config.hidden_size))
@@ -32,12 +40,20 @@ class BertEmbeddings(nn.Module):
         self.LayerNorm = Bert.modeling.BertLayerNorm(config.hidden_size, eps=1e-12)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def forward(self, word_ids, seg_ids, posi_ids):
+    def forward(self, word_ids, seg_ids, posi_ids, age_ids, gender_ids):
         embeddings = self.word_embeddings(word_ids)
 
         if self.feature_dict['position']:
             posi_embeddings = self.posi_embeddings(posi_ids)
             embeddings = embeddings + posi_embeddings
+
+        if self.feature_dict['age']:
+            age_embeddings = self.age_embeddings(age_ids)
+            embeddings = embeddings + age_embeddings
+
+        if self.feature_dict['gender']:
+            gender_embeddings = self.gender_embeddings(gender_ids)
+            embeddings = embeddings + gender_embeddings
 
         if self.feature_dict['seg']:
             segment_embed = self.segment_embeddings(seg_ids)
@@ -78,7 +94,7 @@ class BertModel(Bert.modeling.BertPreTrainedModel):
         self.pooler = Bert.modeling.BertPooler(config)
         self.apply(self.init_bert_weights)
 
-    def forward(self, input_ids, seg_ids, posi_ids, attention_mask,
+    def forward(self, input_ids, seg_ids, posi_ids, age_ids, gender_ids, attention_mask,
                 output_all_encoded_layers=True):
 
         # We create a 3D attention mask from a 2D tensor mask.
@@ -96,7 +112,7 @@ class BertModel(Bert.modeling.BertPreTrainedModel):
         extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
-        embedding_output = self.embeddings(input_ids, seg_ids, posi_ids)
+        embedding_output = self.embeddings(input_ids, seg_ids, posi_ids, age_ids, gender_ids)
         encoded_layers = self.encoder(embedding_output,
                                       extended_attention_mask,
                                       output_all_encoded_layers=output_all_encoded_layers)
@@ -108,24 +124,20 @@ class BertModel(Bert.modeling.BertPreTrainedModel):
 
 
 class BertForMultiLabelPrediction(Bert.modeling.BertPreTrainedModel):
-    def __init__(self, args, config, feature_dict, cls_heads, cls_config=None, class_weights=None):
-        super(BertForMultiLabelPrediction, self).__init__(config)
-        self.cls_heads = cls_heads
-        self.bert = BertModel(config, feature_dict)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+    def __init__(self, args, bert_conf, feature_dict, cls_conf, class_weights=None):
+        super(BertForMultiLabelPrediction, self).__init__(bert_conf)
+        self.task = cls_conf['task']
+        self.bert = BertModel(bert_conf, feature_dict)
+        self.dropout = nn.Dropout(bert_conf.hidden_dropout_prob)
 
-        if 'los_binary' in cls_heads:
-            self.los_binary = nn.Linear(config.hidden_size, 1)
-        if 'los_real' in cls_heads:
-            self.los_real = nn.Linear(config.hidden_size, 1)
-        if 'los_category' in cls_heads:
-            self.los_category = nn.Linear(config.hidden_size, len(cls_config['classes']) + 1)
+        if self.task in ['binary', 'm30']:
+            self.los_binary = nn.Linear(bert_conf.hidden_size, 1)
+        elif self.task == 'real':
+            self.los_real = nn.Linear(bert_conf.hidden_size, 1)
+        elif self.task == 'category':
+            self.los_category = nn.Linear(bert_conf.hidden_size, len(cls_conf['cats']) + 1)
             nn.init.xavier_uniform_(self.los_category.weight)
             nn.init.zeros_(self.los_category.bias)
-        if 'req_hosp' in cls_heads:
-            self.req_hosp = nn.Linear(config.hidden_size, 1)
-        if 'mortality_30' in cls_heads:
-            self.mortality_30 = nn.Linear(config.hidden_size, 1)
 
         self.apply(self.init_bert_weights)
         self.is_loss_set = False
@@ -134,34 +146,23 @@ class BertForMultiLabelPrediction(Bert.modeling.BertPreTrainedModel):
         self.l1_loss = nn.L1Loss()
         self.ce_loss = nn.CrossEntropyLoss(weight=class_weights)
 
-    def forward(self, input_ids, posi_ids=None, seg_ids=None, targets=None, attention_mask=None):
+    def forward(self, input_ids, posi_ids=None, age_ids=None, gender_ids=None, seg_ids=None, targets=None, attention_mask=None):
         # Bert part of the model
-        _, pooled_output = self.bert(input_ids, seg_ids, posi_ids, attention_mask, output_all_encoded_layers=False)
+        _, pooled_output = self.bert(input_ids, seg_ids, posi_ids, age_ids, gender_ids, attention_mask, output_all_encoded_layers=False)
         logits = self.dropout(pooled_output)
 
+        loss, out = None, None
         # Classification heads part of model
-        outputs = {}
-        loss = None
-        self.is_loss_set = False
-        if 'los_binary' in self.cls_heads:
+        if self.task in ['binary', 'm30']:
             out = self.sigmoid(self.los_binary(logits))  # BCELoss
-            loss = self.add_loss(self.bce_loss(out.view(-1, 1), targets['los_binary'].view(-1, 1)), loss)
-            outputs['los_binary'] = out
-        if 'los_real' in self.cls_heads:
+            loss = self.bce_loss(out.squeeze(), targets.squeeze())
+        elif self.task == 'real':
             out = self.los_real(logits)  # nn.L1Loss()
-            loss = self.add_loss(self.l1_loss(out.view(-1, 1), targets['los'].view(-1, 1)), loss)
-            outputs['los_real'] = out
-        if 'los_category' in self.cls_heads:
+            loss = self.l1_loss(out.squeeze(), targets.squeeze())
+        elif self.task == 'category':
             out = self.los_category(logits)  # CrossEntropyLoss()
-            loss = self.add_loss(self.ce_loss(out, targets['los_category'].squeeze()), loss)
-            outputs['los_category'] = out
-
-        return loss, outputs
-
-    def add_loss(self, new_loss, prev_loss=None):
-        if self.is_loss_set:
-            prev_loss += new_loss
-            return prev_loss
+            loss = self.ce_loss(out, targets.squeeze())
         else:
-            self.is_loss_set = True
-            return new_loss
+            exit(f'Task: {self.task} not implemented for BertModel')
+
+        return loss, out

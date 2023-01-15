@@ -2,13 +2,16 @@ import copy
 import os
 import datetime
 import random
+from bisect import bisect
+
 import numpy as np
 import pandas as pd
 from Utils.utils import pickle_load
+from sklearn.model_selection import train_test_split
 
 
 class Corpus:
-    def __init__(self, data_path, sequences=None):
+    def __init__(self, data_path):
         self.data_path = data_path
         self.corpus_df = None
         self.vocabulary = None
@@ -16,11 +19,7 @@ class Corpus:
         self.train_idx = None
         self.eval_idx = None
         self.test_idx = None
-
-        if sequences:
-            self.sequences = sequences
-        else:
-            self.sequences = None
+        self.sequences = None
 
     def create_vocabulary(self):
         tokens = set()
@@ -50,7 +49,7 @@ class Corpus:
 
     def get_vocabulary(self):
         self.create_vocabulary()
-
+        print(f'Length of Vocabulary: {len(self.vocabulary["index2token"])}')
         return self.vocabulary
 
     def load_sequences(self, file_name):
@@ -85,51 +84,6 @@ class Corpus:
 
         self.corpus_df = pd.DataFrame.from_dict(sequence_list)
 
-    def count_requires_hosp(self):
-        return sum([1 if seq.req_hosp else 0 for seq in self.sequences])
-
-    def get_sequence_lengths(self):
-        return [len(seq.event_tokens) for seq in self.sequences]
-
-    def get_num_sequences(self):
-        return len(self.sequences)
-
-    def cut_sequences_by_hours(self, hours):
-        for seq in self.sequences:
-            seq.cut_by_hours(hours)
-
-    def cut_sequences_by_apriori(self):
-        for seq in self.sequences:
-            seq.event_times = seq.event_times[0:seq.apriori_len]
-            seq.event_tokens = seq.event_tokens[0:seq.apriori_len]
-            seq.event_values = seq.event_values[0:seq.apriori_len]
-
-    def get_subset_by_uns_diag(self):
-        new_corpus = copy.deepcopy(self)
-        sequences = self.sequences.copy()
-        new_sequences = []
-
-        for seq in sequences:
-            if seq.uns_diag:
-                new_sequences.append(seq)
-
-        new_corpus.sequences = new_sequences
-
-        return new_corpus
-
-    def get_subset_by_req_hosp(self):
-        new_corpus = copy.deepcopy(self)
-        sequences = self.sequences.copy()
-        new_sequences = []
-
-        for seq in sequences:
-            if seq.req_hosp:
-                new_sequences.append(seq)
-
-        new_corpus.sequences = new_sequences
-
-        return new_corpus
-
     def get_subset_by_mortality_30(self):
         new_corpus = copy.deepcopy(self)
         sequences = self.sequences.copy()
@@ -143,86 +97,29 @@ class Corpus:
 
         return new_corpus
 
-    def get_subset_corpus(self, min_hours):
-        new_corpus = copy.deepcopy(self)
-        sequences = self.sequences.copy()
-        train, test, evals = [], [], []
+    def get_labels(self):
+        labels = []
+        for seq in self.sequences:
+            labels.append(seq.label)
 
-        for index in self.train_idx:
-            seq = sequences[index]
-            if seq.length_of_stay * 24 >= min_hours:
-                # Cut sequence to min_hours of data
-                seq.cut_by_hours(min_hours)
-                # subtract min_hours from the los
-                seq.length_of_stay = (seq.length_of_stay * 24 - min_hours) / 24
-                train.append(sequences[index])
-
-        for index in self.eval_idx:
-            seq = sequences[index]
-            if seq.length_of_stay * 24 >= min_hours:
-                # Cut sequence to min_hours of data
-                seq.cut_by_hours(min_hours)
-                # subtract min_hours from the los
-                seq.length_of_stay = (seq.length_of_stay * 24 - min_hours) / 24
-                evals.append(sequences[index])
-
-        for index in self.test_idx:
-            seq = sequences[index]
-            if seq.length_of_stay * 24 >= min_hours:
-                # Cut sequence to min_hours of data
-                seq.cut_by_hours(min_hours)
-                # subtract min_hours from the los
-                seq.length_of_stay = (seq.length_of_stay * 24 - min_hours) / 24
-                test.append(sequences[index])
-
-        new_sequences = train + evals + test
-        train_idx = list(range(0, len(train)))
-        eval_idx = list(range(len(train), len(train) + len(evals)))
-        test_idx = list(range(len(train) + len(evals), len(train) + len(evals) + len(test)))
-
-        new_corpus.sequences = new_sequences
-        new_corpus.train_idx = train_idx
-        new_corpus.eval_idx = eval_idx
-        new_corpus.test_idx = test_idx
-
-        return new_corpus
-
-    def get_subset_by_min_hours(self, min_hours):
-        new_corpus = copy.deepcopy(self)
-        sequences = self.sequences.copy()
-        new_sequences = []
-
-        for seq in sequences:
-            if seq.length_of_stay * 24 >= min_hours:
-                new_sequences.append(seq)
-
-        new_corpus.sequences = new_sequences
-
-        return new_corpus
-
-    def create_train_test_idx(self, train_size=0.8):
-        # Indexes for examples
-        indexes = list(range(0, len(self.sequences)))
-
-        # Randomize examples
-        random.shuffle(indexes)
-
-        train_size = int(len(indexes) * train_size)
-        self.train_idx = indexes[0:train_size]
-        self.test_idx = indexes[train_size:]
+        return labels
 
     def create_train_evel_test_idx(self, train_size=0.8):
-        # Indexes for examples
+
+        # Sample indexes
         indexes = list(range(0, len(self.sequences)))
 
         # Randomize examples
         random.shuffle(indexes)
 
-        train_len = int(len(indexes) * train_size)
-        eval_len = int(len(indexes) * (1 - train_size) / 2)
-        self.train_idx = indexes[0:train_len]
-        self.eval_idx = indexes[train_len: eval_len + train_len]
-        self.test_idx = indexes[train_len + eval_len:]
+        # Split data
+        all_labels = self.get_labels()
+        train_idx, eval_idx, _, eval_labs = train_test_split(indexes, all_labels, stratify=all_labels, test_size=1-train_size)
+        eval_idx, test_idx = train_test_split(eval_idx, stratify=eval_labs, test_size=0.5)
+
+        self.train_idx = train_idx
+        self.eval_idx = eval_idx
+        self.test_idx = test_idx
 
     def split_train_eval_test(self):
         train = list(np.array(self.sequences)[self.train_idx])
@@ -232,6 +129,60 @@ class Corpus:
 
         return train, evalu, test
 
+    def split_train_eval_test_labels(self):
+        all_labels = self.get_labels()
+        train = list(np.array(all_labels)[self.train_idx])
+        evalu = list(np.array(all_labels)[self.eval_idx])
+        test = list(np.array(all_labels)[self.test_idx])
+
+        return train, evalu, test
+
     def randomize_sequences(self):
         for sequence in self.sequences:
             random.shuffle(sequence.event_tokens)
+
+    def create_pos_ids(self, event_dist=60):
+        for seq in self.sequences:
+            seq.create_position_ids(event_dist)
+
+    def prepare_corpus(self, conf=None):
+
+        all_years = {2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021}
+        all_types = {'adm', 'proc', 'diag', 'lab', 'vital', 'apriori'}
+
+        whole_vocabulary = self.get_vocabulary()
+
+        new_sequences = []
+        # Process each sequence
+        for seq in self.sequences:
+
+            # Remove Unwanted years
+            skip_years = all_years.difference(conf['years'])
+            if seq.ed_start.year in skip_years:
+                continue
+
+            # Skip if los is shorter than max_hours
+            if conf['max_hours'] and seq.length_of_stay * 24 < conf['max_hours']:
+                continue
+
+            # Remove if sequence longer than max_hours
+            seq.cut_by_hours(conf['max_hours'])
+
+            # Remove unwanted types
+            skip_types = all_types.difference(conf['types'])
+            del_indexes = [i for i, t in enumerate(seq.event_types) if t in skip_types]
+            seq.remove_indexes(del_indexes)
+
+            # Change LOS based on max_hours
+            if conf['max_hours']:
+                seq.minus_los(conf['max_hours'])
+
+            # Create label
+            seq.create_label(conf)
+
+            new_sequences.append(seq)
+
+        self.sequences = new_sequences
+
+        return whole_vocabulary
+

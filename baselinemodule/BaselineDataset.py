@@ -6,6 +6,7 @@ import numpy as np
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.feature_selection import chi2
 
 
 class BaselineDataset:
@@ -20,7 +21,7 @@ class BaselineDataset:
         self.imputation = args.imputation
         self.sequences = corpus.sequences
         self.scaler = args.scaler
-        self.task = args.task
+        self.feature_select = args.feature_select
         self.conf = conf
         self.tokens = None
         self.data_x = []
@@ -53,17 +54,27 @@ class BaselineDataset:
         print('Setting up label task')
         self.train_y, self.test_y = self.setup_label_task(train_y, test_y)
 
-    def setup_label_task(self, train_y, test_y):
-        if self.task == 'los_real':
-            pass
-        elif self.task == 'los_binary':
-            train_y = [1 if los > self.conf['los_binary_threshold'] else 0 for los in train_y]
-            test_y = [1 if los > self.conf['los_binary_threshold'] else 0 for los in test_y]
-        elif self.task == 'los_category':
-            train_y = [bisect(self.conf['classes'], los) for los in train_y]
-            test_y = [bisect(self.conf['classes'], los) for los in test_y]
+        print('Feature selection')
+        self.feature_reduct()
+
+    def feature_reduct(self):
+        if self.feature_select == 'chi2':
+            scores, p_values = chi2(self.train_x, self.train_y)
+            print('Hello')
         else:
-            exit(f'Task: {self.task} not implemented')
+            pass
+
+    def setup_label_task(self, train_y, test_y):
+        if self.conf['task'] == 'real':
+            pass
+        elif self.conf['task'] == 'binary':
+            train_y = [1 if los > self.conf['binary_thresh'] else 0 for los in train_y]
+            test_y = [1 if los > self.conf['binary_thresh'] else 0 for los in test_y]
+        elif self.conf['task'] == 'category':
+            train_y = [bisect(self.conf['cats'], los) for los in train_y]
+            test_y = [bisect(self.conf['cats'], los) for los in test_y]
+        else:
+            exit(f'Task: {self.conf["task"]} not implemented')
 
         return train_y, test_y
 
@@ -110,7 +121,21 @@ class BaselineDataset:
                     else:
                         sample.append(np.nan)
                         sample.append(np.nan)
-                # TODO: Create the min, max and avg strategies
+                elif self.strategy == 'min':
+                    if token in seq.token_value_dict:
+                        sample.append(min(seq.token_value_dict[token]))
+                    else:
+                        sample.append(np.nan)
+                elif self.strategy == 'max':
+                    if token in seq.token_value_dict:
+                        sample.append(max(seq.token_value_dict[token]))
+                    else:
+                        sample.append(np.nan)
+                elif self.strategy == 'avg':
+                    if token in seq.token_value_dict:
+                        sample.append(sum(seq.token_value_dict[token]) / len(seq.token_value_dict[token]))
+                    else:
+                        sample.append(np.nan)
                 else:
                     exit('Strategy not implemented')
             self.data_x.append(sample)

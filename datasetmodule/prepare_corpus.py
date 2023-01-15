@@ -7,6 +7,7 @@ import os
 
 from Utils.Corpus import Corpus
 from Utils.Sequence import Sequence
+from Utils.Tokenizer import Tokenizer
 from Utils.utils import save_corpus
 
 
@@ -95,15 +96,19 @@ def prepare_typed_data(group_data, patient_id, start, end, labels):
         forloeb_data = forloeb_data[labels]
 
         return forloeb_data
+    else:
+        return None
 
 
 def prepare_patients(max_sequences, corpus_file, data_path):
     # Load files
     forloeb_file = 'forloeb'
     diagnosis_file = 'diagnosis'
-    labtest_file = 'labka'
+    labtest_file = 'labka_all'
     vitals_file = 'ccs'
     pres_file = 'luna'
+    adm_file = 'adm'
+    proc_file = 'proc'
 
     forloeb = pd.read_parquet(os.path.join(data_path, f'{forloeb_file}.parquet'))
     forloeb = forloeb.sample(frac=1)
@@ -111,18 +116,24 @@ def prepare_patients(max_sequences, corpus_file, data_path):
     labtests = pd.read_parquet(os.path.join(data_path, f'{labtest_file}.parquet'))
     vitals = pd.read_parquet(os.path.join(data_path, f'{vitals_file}.parquet'))
     prescs = pd.read_parquet(os.path.join(data_path, f'{pres_file}.parquet'))
+    procs = pd.read_parquet(os.path.join(data_path, f'{proc_file}.parquet'))
+    adm = pd.read_parquet(os.path.join(data_path, f'{adm_file}.parquet'))
 
     # Sort on time for late optimization
     diagnosis = diagnosis.sort_values(by=['event_time'])
     labtests = labtests.sort_values(by=['event_time'])
     vitals = vitals.sort_values(by=['event_time'])
     prescs = prescs.sort_values(by=['event_time'])
+    procs = procs.sort_values(by=['event_time'])
+    adm = adm.sort_values(by=['event_time'])
 
     # Groupby for optimization
     diagnosis = diagnosis.groupby(by='patientid')
     labtests = labtests.groupby(by='patientid')
     vitals = vitals.groupby(by='patientid')
     prescs = prescs.groupby(by='patientid')
+    procs = procs.groupby(by='patientid')
+    adm = adm.groupby(by='patientid')
 
     # For saving all forloeb
     sequence_list = []
@@ -161,8 +172,8 @@ def prepare_patients(max_sequences, corpus_file, data_path):
 
         presc, presc_names = get_prescriptions(pd_presc)
 
-        apriori = demo + comorb + presc + extra + adm_time
-        apriori_names = demo_names + comorb_names + presc_names + extra_names + adm_time_names
+        apriori = comorb + presc + extra + adm_time
+        apriori_names = comorb_names + presc_names + extra_names + adm_time_names
 
         mortality_30 = True if row['mortality_30'] == 1 else False
         uns_diag = get_is_unspecific(row['last_diagnosis'])
@@ -175,6 +186,8 @@ def prepare_patients(max_sequences, corpus_file, data_path):
         pd_lab = prepare_typed_data(labtests, pat_id, ed_start, hosp_end, ['event_time', 'npucode', 'value', 'reftext'])
         pd_diag = prepare_typed_data(diagnosis, pat_id, ed_start, hosp_end, ['event_time', 'diakod'])
         pd_vitals = prepare_typed_data(vitals, pat_id, ed_start, hosp_end, ['event_time', 'intervention_code', 'value'])
+        pd_adm = prepare_typed_data(adm, pat_id, ed_start, hosp_end, ['event_time', 'event_code'])
+        pd_procs = prepare_typed_data(procs, pat_id, ed_start, hosp_end, ['event_time', 'event_code'])
 
         sequence = Sequence(
             pat_id,
@@ -183,7 +196,8 @@ def prepare_patients(max_sequences, corpus_file, data_path):
             pd_lab,
             pd_vitals,
             pd_diag,
-            pd.DataFrame(),
+            pd_adm,
+            pd_procs,
             ed_start,
             ed_end,
             hosp_end,
@@ -192,12 +206,14 @@ def prepare_patients(max_sequences, corpus_file, data_path):
             length_of_stay,
             mortality_30,
             req_hosp,
-            uns_diag
+            uns_diag,
+            age=demo[1],
+            gender=demo[0]
         )
 
         # Tokenize and create patient string
         sequence.tokenize_all()
-        sequence.create_patient_string(['apriori', 'diag', 'lab', 'vital'])
+        sequence.create_patient_string(['apriori', 'diag', 'lab', 'vital', 'adm', 'proc'])
         sequence.minimize()
 
         # Check for None values in sequence
@@ -211,8 +227,9 @@ def prepare_patients(max_sequences, corpus_file, data_path):
         else:
             index += 1
 
+    print(Tokenizer.not_found)
+
     print('Creating and saving Corpus')
     corpus = Corpus(data_path, sequence_list)
-    corpus.create_vocabulary()
     corpus.make_corpus_df()
     save_corpus(corpus, os.path.join(data_path, corpus_file))

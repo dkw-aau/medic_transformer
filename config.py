@@ -40,8 +40,6 @@ class Config:
 
         elif self.task in ['history', 'pre_train', 'fine_tune']:
 
-            self.step_eval = conf.getint('globals', 'step_eval')
-
             self.lr = conf.getfloat('optimization', 'lr')
             self.warmup_proportion = conf.getfloat('optimization', 'warmup_proportion')
             self.weight_decay = conf.getfloat('optimization', 'weight_decay')
@@ -51,6 +49,7 @@ class Config:
             self.max_len_seq = conf.getint('train_params', 'max_len_seq')
             use_gpu = conf.getboolean('train_params', 'use_gpu')
             self.use_pretrained = conf.getboolean('train_params', 'use_pretrained')
+            self.save_model = conf.getboolean('train_params', 'save_model')
 
             self.device = 'cuda' if use_gpu is True else 'cpu'
 
@@ -69,6 +68,7 @@ class Config:
             self.imputation = conf.get('baseline', 'imputation')
             self.scaler = conf.get('baseline', 'scaler')
             self.task = conf.get('baseline', 'task')
+            self.feature_select = conf.get('baseline', 'feature_select')
             self.cls = conf.get('baseline', 'cls')
             self.use_saved = conf.getboolean('baseline', 'use_saved')
 

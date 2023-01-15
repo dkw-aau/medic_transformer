@@ -11,6 +11,12 @@ def code2index(tokens, token2idx, mask_token=None):
     return tokens, output_tokens
 
 
+def pad_position(pos, max_len):
+    last_pos = 0 if len(pos) == 0 else pos[-1] + 1
+    pos = pos + [last_pos] * max(0, max_len - len(pos))
+    return pos
+
+
 def random_mask(tokens, token2idx):
     output_label = []
     output_token = []

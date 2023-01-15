@@ -1,8 +1,11 @@
+import numpy
 import pandas as pd
 import math
 
 
 class Tokenizer:
+    not_found = 0
+
     def __init__(self):
         pass
 
@@ -36,21 +39,39 @@ class Tokenizer:
         else:
             return None
 
-    def tokenize_apriori(self, apriori, age_groups, names, ed_start):
-        gender = ['male'] if apriori[0] == 1 else ['female']
-        age_group = [f'age_group_{str(math.floor(apriori[1] / age_groups))}']
-        diseases = [f'{name}_{"pos" if val == 1 else "neg"}' for name, val in
-                    zip(names[2:20], apriori[2:20])]
-        prescs = [f'{name}_{"pos" if val == 1 else "neg"}' for name, val in
-                  zip(names[20:34], apriori[20:34])]
-        ambulance = [f'amb_{"pos" if apriori[34] == 1 else "neg"}']
-        triage_kat = [f'triage_{int(apriori[35])}' if int(apriori[35]) != -1 else 'UNK']
-        arrival_weekend = [f'arr_weekend_{"pos" if apriori[36] == 1 else "neg"}']
-        arrival_day = [f'arr_day_{apriori[37]}']
-        arrival_evening = [f'arr_evening_{"pos" if apriori[38] == 1 else "neg"}']
-        arrival_night = [f'arr_night_{"pos" if apriori[39] == 1 else "neg"}']
+    def tokenize_adm(self, adm):
+        if adm is not None and not adm.empty:
+            adm.drop_duplicates(inplace=True)
+            adm['token_orig'] = adm['event_code']
+            adm['token'] = adm['event_code']
+            adm['event_value'] = 1
+            return adm[['token', 'token_orig', 'event_value', 'event_time']]
+        else:
+            return None
 
-        tokens = ['CLS'] + gender + age_group + diseases + prescs + ambulance + triage_kat
+    def tokenize_procs(self, procs):
+        if procs is not None and not procs.empty:
+            procs.drop_duplicates(inplace=True)
+            procs['token_orig'] = procs['event_code']
+            procs['token'] = procs['event_code']
+            procs['event_value'] = 1
+            return procs[['token', 'token_orig', 'event_value', 'event_time']]
+        else:
+            return None
+
+    def tokenize_apriori(self, apriori, names, ed_start):
+        diseases = [f'{name}_{"pos" if val == 1 else "neg"}' for name, val in
+                    zip(names[0:18], apriori[0:18])]
+        prescs = [f'{name}_{"pos" if val == 1 else "neg"}' for name, val in
+                  zip(names[18:32], apriori[18:32])]
+        ambulance = [f'amb_{"pos" if apriori[32] == 1 else "neg"}']
+        triage_kat = [f'triage_{int(apriori[33])}' if int(apriori[33]) != -1 else 'UNK']
+        arrival_weekend = [f'arr_weekend_{"pos" if apriori[34] == 1 else "neg"}']
+        arrival_day = [f'arr_day_{apriori[35]}']
+        arrival_evening = [f'arr_evening_{"pos" if apriori[36] == 1 else "neg"}']
+        arrival_night = [f'arr_night_{"pos" if apriori[37] == 1 else "neg"}']
+
+        tokens = ['CLS'] + diseases + prescs + ambulance + triage_kat
         tokens = tokens + arrival_weekend + arrival_day + arrival_evening + arrival_night
         values = [1] + apriori
         token_orig = ['CLS'] + names
@@ -61,6 +82,16 @@ class Tokenizer:
 
     def lab_reference_values(self, row):
         reftext = row[3]
+        if reftext is None:
+            Tokenizer.not_found += 1
+            return numpy.nan
+        if 'Ikke relevant' in reftext:
+            Tokenizer.not_found += 1
+            return numpy.nan
+        if 'Ikke fastlagt' in reftext:
+            Tokenizer.not_found += 1
+            return numpy.nan
+
         if '<' in reftext:
             refnumber = float(reftext.replace('<', '').replace(',', '.'))
             if row[2] > refnumber:
@@ -74,7 +105,13 @@ class Tokenizer:
             else:
                 return row[1] + '_normal'
         elif '-' in reftext:
-            low, high = reftext.replace(',', '.').split('-')
+            occ = reftext.count('-')
+            if occ == 1:
+                low, high = reftext.replace(',', '.').split('-')
+            else:
+                idx2 = reftext.index('-', 1)
+                low = reftext[:idx2]
+                high = reftext[idx2 + 1:]
             if row[2] < float(low):
                 return row[1] + '_low'
             elif row[2] > float(high):

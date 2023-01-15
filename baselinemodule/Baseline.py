@@ -5,7 +5,7 @@ import os
 import numpy as np
 
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.metrics import confusion_matrix
 
 
@@ -26,20 +26,27 @@ class Baseline:
         # Load Corpus
         print('Loading Corpus')
         corpus = load_corpus(os.path.join(args.path['data_fold'], args.corpus_name))
-        corpus.create_train_evel_test_idx(train_size=0.8)
 
-        # Extract x hours of data
-        print(f'Extracting {self.args.hours} hours data from each subject')
-        corpus = corpus.get_subset_corpus(min_hours=args.hours)
-        #corpus.cut_sequences_by_apriori()
-
-        conf = {
-            'los_binary_threshold': 5,
-            'classes': [1, 2, 3, 4, 5, 6, 7, 14]
+        self.conf = {
+            'task': 'binary',
+            'metric': 'auc',
+            'binary_thresh': 2,
+            'cats': [2, 7],
+            'years': [2018, 2019, 2020, 2021],
+            'types': ['apriori', 'adm', 'proc', 'vital', 'lab'],  # 'apriori', 'vital', 'diag', 'apriori', 'adm', 'proc', 'lab'
+            'max_hours': 24
         }
 
+        # Prepare Corpus
+        print('Preparing Corpus')
+        vocab = corpus.prepare_corpus(
+            self.conf
+        )
+        corpus.create_pos_ids(event_dist=300)
+        corpus.create_train_evel_test_idx(train_size=0.8)
+
         print('Creating dataset from sequences')
-        dataset = BaselineDataset(corpus, args, conf)
+        dataset = BaselineDataset(corpus, args, self.conf)
         self.train_x = dataset.train_x
         self.train_y = dataset.train_y
         self.test_x = dataset.test_x
@@ -59,13 +66,12 @@ class Baseline:
         print('\nTraining Classifier')
         clf.fit(self.train_x, self.train_y)
 
-        test_preds = clf.predict(self.test_x)
-
         # Print metric
+        if self.conf['task'] in ['binary', 'category']:
+            probs = clf.predict_proba(self.test_x)[:, 1]
+            score = roc_auc_score(self.test_y, probs, multi_class='ovo')
+            print(f'{self.conf["metric"]}: {score}')
 
-        print(accuracy_score(self.test_y, test_preds))
-
-        if self.task in ['los_binary', 'los_category']:
-            print(confusion_matrix(self.test_y, test_preds))
-
+        elif self.task in ['real']:
+            pass
 

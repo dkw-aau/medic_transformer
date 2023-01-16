@@ -7,6 +7,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.feature_selection import chi2
+from sklearn.feature_selection import SelectKBest
 
 
 class BaselineDataset:
@@ -39,46 +40,44 @@ class BaselineDataset:
         print('Extracting samples from sequences')
         self.extract_samples()
 
+        print('Setting up label task')
+        self.data_y = self.setup_label_task()
+
         # Split samples
         print('Splitting data into train and test')
-        train_x, test_x, train_y, test_y = self.split_train_test(train_size=0.8)
+        self.train_x, self.test_x, self.train_y, self.test_y = self.split_train_test(train_size=0.8)
 
         # Do data imputation
         print('Imputing missing values')
-        train_x, test_x = self.impute_samples(train_x, test_x)
+        self.train_x, self.test_x = self.impute_samples()
 
         # Scale data
         print('Scaling the data')
-        self.train_x, self.test_x = self.scale(train_x, test_x)
-
-        print('Setting up label task')
-        self.train_y, self.test_y = self.setup_label_task(train_y, test_y)
+        self.train_x, self.test_x = self.scale()
 
         print('Feature selection')
-        self.feature_reduct()
+        self.train_x, self.test_x = self.feature_reduct()
 
     def feature_reduct(self):
         if self.feature_select == 'chi2':
-            scores, p_values = chi2(self.train_x, self.train_y)
-            print('Hello')
+            chi2_selector = SelectKBest(chi2, k=50)
+            chi2_selector.fit(self.train_x, self.train_y)
+            train_x = chi2_selector.transform(self.train_x)
+            test_x = chi2_selector.transform(self.test_x)
         else:
-            pass
+            train_x = self.train_x
+            test_x = self.test_x
 
-    def setup_label_task(self, train_y, test_y):
-        if self.conf['task'] == 'real':
-            pass
-        elif self.conf['task'] == 'binary':
-            train_y = [1 if los > self.conf['binary_thresh'] else 0 for los in train_y]
-            test_y = [1 if los > self.conf['binary_thresh'] else 0 for los in test_y]
-        elif self.conf['task'] == 'category':
-            train_y = [bisect(self.conf['cats'], los) for los in train_y]
-            test_y = [bisect(self.conf['cats'], los) for los in test_y]
-        else:
-            exit(f'Task: {self.conf["task"]} not implemented')
+        return train_x, test_x
 
-        return train_y, test_y
+    def setup_label_task(self):
+        data_y = []
+        for seq in self.sequences:
+            data_y.append(seq.label)
 
-    def scale(self, train, test):
+        return data_y
+
+    def scale(self):
         if self.scaler == 'standard':
             scaler = StandardScaler()
         elif self.scaler == 'min-max':
@@ -89,13 +88,13 @@ class BaselineDataset:
             exit(f'Scaler {self.scaler} not implemented')
 
         if self.scaler != 'none':
-            scaler.fit(train)
-            train = scaler.transform(train)
-            test = scaler.transform(test)
+            scaler.fit(self.train_x)
+            train = scaler.transform(self.train_x)
+            test = scaler.transform(self.test_x)
 
         return train, test
 
-    def impute_samples(self, train, test):
+    def impute_samples(self):
         if self.imputation in ['mean', 'median']:
             imp = SimpleImputer(missing_values=np.nan, strategy=self.imputation)
         elif self.imputation == 'none':
@@ -104,9 +103,9 @@ class BaselineDataset:
             exit(f'Impute strategy {self.imputation} not implemented')
 
         if self.imputation != 'none':
-            imp.fit(train)
-            train = imp.transform(train)
-            test = imp.transform(test)
+            imp.fit(self.train_x)
+            train = imp.transform(self.train_x)
+            test = imp.transform(self.test_x)
 
         return train, test
 
@@ -149,6 +148,9 @@ class BaselineDataset:
         # Remove some tokens from the set
         tokens_to_remove = ['CLS', 'SEP', 'MASK', 'UNK', 'PAD']
         tokens.difference_update(tokens_to_remove)
+
+        # Add age and gender
+        tokens.update({'age', 'gender'})
         self.tokens = tokens
 
     def group_sequence_values(self):
@@ -156,11 +158,11 @@ class BaselineDataset:
             seq.group_token_values(self.tokens)
 
     def split_train_test(self, train_size=0.8):
-        train_x, test_x, train_y, test_y = train_test_split(self.data_x, self.data_y, test_size=1 - train_size, random_state=42)
+        train_x, test_x, train_y, test_y = train_test_split(self.data_x, self.data_y, stratify=self.data_y, test_size=1-train_size, random_state=42)
         return train_x, test_x, train_y, test_y
 
     def split_train_eval_test(self, train_size):
-        train, eval = train_test_split(self.data_x, self.data_y, test_size=1 - train_size, random_state=42)
+        train, eval = train_test_split(self.data_x, self.data_y, stratify=self.data_y, test_size=1 - train_size, random_state=42)
         eval, test = train_test_split(eval, test_size=0.5, random_state=42)
 
         return train, eval, test

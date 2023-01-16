@@ -161,6 +161,9 @@ class Sequence:
                 else:
                     token_value_dict[token] = [value]
 
+        # Add age and gender
+        token_value_dict['age'] = [self.age]
+        token_value_dict['gender'] = [self.gender]
         self.token_value_dict = token_value_dict
 
     def create_label(self, conf):

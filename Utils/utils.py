@@ -21,12 +21,9 @@ def load_state_dict(path, model):
     return model
 
 
-def save_model_state(model, file_path, file_name):
+def save_model_state(model, file_path):
     print("*** Saving model ***")
-    create_folder(file_path)
-    output_model_file = os.path.join(file_path, file_name)
-
-    th.save(model.state_dict(), output_model_file)
+    th.save(model.state_dict(), file_path)
 
 
 def pickle_save(data, save_path):
@@ -68,20 +65,20 @@ def load_obj(name):
         return pickle.load(f)
 
 
-def save_baseline_data(train_x, train_y, test_x, test_y, path):
+def save_baseline_data(train_x, train_y, test_x, test_y, task, path):
     print('Saving train and test data to file')
     train = np.append(train_x, np.expand_dims(train_y, axis=1), axis=1)
     test = np.append(test_x, np.expand_dims(test_y, axis=1), axis=1)
-    with open(os.path.join(path, 'base_train.npy'), 'wb') as f:
+    with open(os.path.join(path, f'base_train_{task}.npy'), 'wb') as f:
         np.save(f, train)
-    with open(os.path.join(path, 'base_test.npy'), 'wb') as f:
+    with open(os.path.join(path, f'base_test_{task}.npy'), 'wb') as f:
         np.save(f, test)
 
 
-def load_baseline_date(path):
-    with open(os.path.join(path, 'base_train.npy'), 'rb') as f:
+def load_baseline_date(path, task):
+    with open(os.path.join(path, f'base_train_{task}.npy'), 'rb') as f:
         train = np.load(f)
-    with open(os.path.join(path, 'base_test.npy'), 'rb') as f:
+    with open(os.path.join(path, f'base_test_{task}.npy'), 'rb') as f:
         test = np.load(f)
 
     train_x = train[:, :-1]

@@ -1,5 +1,7 @@
 import numpy as np
 from torch.utils.data import DataLoader
+
+from Utils.EarlyStopping import EarlyStopping
 from .DataLoader.HistoryLoader import HistoryLoader
 import pytorch_pretrained_bert as Bert
 from transformermodule.Evaluation.Evaluator import Evaluator
@@ -29,7 +31,7 @@ class HistoryTrainer:
         # TODO: Implement AUC-ROC, AUC-PR, KAPPA, print confusion matrix
         self.conf = {
             'task': 'binary',
-            'metric': 'auc',
+            'metrics': ['f1', 'auc'],
             'binary_thresh': 2,
             'cats': [2, 7],
             'years': [2018, 2019, 2020, 2021],
@@ -40,9 +42,6 @@ class HistoryTrainer:
         # Load corpus
         corpus = load_corpus(os.path.join(args.path['data_fold'], args.corpus_name))
 
-        all_ages = {seq.age for seq in corpus.sequences}
-        print(all_ages)
-        print(len(all_ages))
         vocab = corpus.prepare_corpus(
             self.conf
         )
@@ -51,30 +50,27 @@ class HistoryTrainer:
 
         # Select subset corpus
         train_x, evalu_x, test_x = corpus.split_train_eval_test()
-        train_y, evalu_y, test_y = corpus.split_train_eval_test_labels()
 
+        # Setup Evaluator
         self.evaluator = Evaluator(conf=self.conf, device=self.args.device)
-        self.evaluator.baseline_results(train_x, train_y, evalu_x, evalu_y, test_x, test_y)
 
-        # Setup dataloader
+        # Setup dataloaders
         Dset = HistoryLoader(token2idx=vocab['token2index'], sequences=train_x, max_len=args.max_len_seq, conf=self.conf)
         self.trainloader = DataLoader(dataset=Dset, batch_size=args.batch_size, shuffle=True, num_workers=0)
 
-        # Eval
         Dset = HistoryLoader(token2idx=vocab['token2index'], sequences=evalu_x, max_len=args.max_len_seq, conf=self.conf)
         self.evalloader = DataLoader(dataset=Dset, batch_size=args.batch_size, shuffle=True, num_workers=0)
 
-        # Compute Class Weights
-        class_weights = compute_class_weight('balanced', classes=np.unique(corpus.get_labels()), y=corpus.get_labels())
-        class_weights = th.tensor(class_weights, dtype=th.float)
+        Dset = HistoryLoader(token2idx=vocab['token2index'], sequences=test_x, max_len=args.max_len_seq, conf=self.conf)
+        self.testloader = DataLoader(dataset=Dset, batch_size=args.batch_size, shuffle=True, num_workers=0)
 
         # Create Bert Model
         model_config = get_model_config(vocab, args)
         feature_dict = {
             'word': True,
             'position': True,
-            'age': False,
-            'gender': False,
+            'age': True,
+            'gender': True,
             'seg': False
         }
         bert_conf = BertConfig(model_config)
@@ -91,8 +87,8 @@ class HistoryTrainer:
 
         # Initialize model parameters
         if args.use_pretrained:
-            print(f'Loading state model with name: {args.finetune_name}')
-            self.model = load_state_dict(os.path.join(args.path['out_fold'], args.finetune_name), self.model)
+            print(f'Loading state model with name: {args.load_name}')
+            self.model = load_state_dict(os.path.join(args.path['out_fold'], args.load_name), self.model)
 
         self.optim = adam(params=list(self.model.named_parameters()), args=args)
 
@@ -100,23 +96,41 @@ class HistoryTrainer:
 
         self.logger.start_log()
 
-        self.logger.log_value('task', self.conf['task'])
+        self.logger.log_value('Experiment', self.args.experiment_name)
         self.logger.log_value('threshold', self.conf['binary_thresh'])
         self.logger.log_value('categories', self.conf['cats'])
 
+        stopper = EarlyStopping(self.args.patience, os.path.join(self.args.path['out_fold'], self.args.save_name))
+
         for e in range(0, epochs):
-            train_loss, train_metric = self.evaluation(self.trainloader)
-            eval_loss, eval_metric = self.evaluation(self.evalloader)
-            self.logger.log_sequence('train/loss', train_loss)
-            self.logger.log_sequence('eval/loss', eval_loss)
-            self.logger.log_sequence(f'train/{self.conf["metric"]}', train_metric)
-            self.logger.log_sequence(f'eval/{self.conf["metric"]}', eval_metric)
-            print(f'Train: Loss {round(train_loss, 3)}, {self.conf["metric"]}: {round(train_metric, 3)}')
-            print(f'Eval: Loss {round(eval_loss, 3)}, {self.conf["metric"]}: {round(eval_metric, 3)}')
+            train_loss, train_metrics = self.evaluation(self.trainloader)
+            eval_loss, eval_metrics = self.evaluation(self.evalloader)
+            train_metrics.update({'loss': train_loss})
+            eval_metrics.update({'loss': eval_loss})
+
+            self.logger.log_metrics(train_metrics, 'train')
+            self.logger.log_metrics(eval_metrics, 'eval')
+
+            self.logger.report_metrics(train_metrics, 'train')
+            self.logger.report_metrics(eval_metrics, 'eval')
+
+            if stopper.step(eval_loss, self.model):
+                self.logger.info('Early Stop!\tEpoch:' + str(e))
+                break
+
             self.epoch(e)
 
-            if self.args.save_model:
-                save_model_state(self.model, self.args.path['out_fold'], self.args.finetune_name)
+        print('Evaluating trained model')
+        self.model = stopper.load_model(self.model)
+
+        test_loss, test_metrics = self.evaluation(self.testloader)
+        test_metrics.update({'loss': test_loss})
+
+        self.logger.report_metrics(test_metrics, 'test')
+        self.logger.log_value('test_loss', test_loss)
+        self.logger.log_values(test_metrics, 'test')
+
+        self.logger.stop_log()
 
     def epoch(self, e):
         self.model.train()

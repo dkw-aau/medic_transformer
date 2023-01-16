@@ -24,21 +24,21 @@ class Config:
 
         # File names
         self.corpus_name = conf.get('files', 'corpus_name')
-        self.history_name = conf.get('files', 'history_name')
-        self.pretrain_name = conf.get('files', 'pretrain_name')
-        self.finetune_name = conf.get('files', 'finetune_name')
+        self.load_name = conf.get('files', 'load_name')
+        self.save_name = conf.get('files', 'save_name')
 
         # Read Logger Arguments
         self.use_logging = conf.getboolean('neptune', 'use_logging', fallback=None)
         self.neptune_project_id = conf.get('neptune', 'neptune_project_id', fallback=None)
         self.neptune_token_key = conf.get('neptune', 'neptune_token_key', fallback=None)
         self.neptune_api_token = get_env(self.neptune_token_key) if self.neptune_token_key is not None else None
+        self.experiment_name = conf.get('neptune', 'experiment_name')
 
         if self.task == 'corpus':
             self.prepare_parquet = conf.getboolean('extraction', 'prepare_parquet')
             self.max_sequences = conf.getint('extraction', 'max_sequences')
 
-        elif self.task in ['history', 'pre_train', 'fine_tune']:
+        if self.task in ['history', 'pre_train', 'fine_tune', 'baseline']:
 
             self.lr = conf.getfloat('optimization', 'lr')
             self.warmup_proportion = conf.getfloat('optimization', 'warmup_proportion')
@@ -50,6 +50,7 @@ class Config:
             use_gpu = conf.getboolean('train_params', 'use_gpu')
             self.use_pretrained = conf.getboolean('train_params', 'use_pretrained')
             self.save_model = conf.getboolean('train_params', 'save_model')
+            self.patience = conf.getint('train_params', 'patience')
 
             self.device = 'cuda' if use_gpu is True else 'cpu'
 
@@ -62,12 +63,11 @@ class Config:
             self.hidden_act = conf.get('model_params', 'hidden_act')
             self.initializer_range = conf.getfloat('model_params', 'initializer_range')
 
-        elif self.task == 'baseline':
+        if self.task == 'baseline':
             self.hours = conf.getint('baseline', 'hours')
             self.strategy = conf.get('baseline', 'strategy')
             self.imputation = conf.get('baseline', 'imputation')
             self.scaler = conf.get('baseline', 'scaler')
-            self.task = conf.get('baseline', 'task')
             self.feature_select = conf.get('baseline', 'feature_select')
             self.cls = conf.get('baseline', 'cls')
             self.use_saved = conf.getboolean('baseline', 'use_saved')

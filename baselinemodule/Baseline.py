@@ -2,11 +2,11 @@ from baselinemodule.BaselineDataset import BaselineDataset
 from Utils.utils import load_corpus, save_baseline_data, load_baseline_date
 from sklearn.neural_network import MLPClassifier
 import os
-import numpy as np
 
+from joblib import dump, load
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, roc_auc_score
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score, roc_auc_score, f1_score
+from sklearn.svm import SVC
 
 
 class Baseline:
@@ -15,21 +15,10 @@ class Baseline:
             args):
 
         self.args = args
-        self.task = args.task
         self.cls = args.cls
 
-        # If use_saved, load previously processed data
-        if self.args.use_saved:
-            self.train_x, self.train_y, self.test_x, self.test_y = load_baseline_date(self.args.path['out_fold'])
-            return
-
-        # Load Corpus
-        print('Loading Corpus')
-        corpus = load_corpus(os.path.join(args.path['data_fold'], args.corpus_name))
-
         self.conf = {
-            'task': 'binary',
-            'metric': 'auc',
+            'task': 'category',
             'binary_thresh': 2,
             'cats': [2, 7],
             'years': [2018, 2019, 2020, 2021],
@@ -37,9 +26,19 @@ class Baseline:
             'max_hours': 24
         }
 
+        # If use_saved, load previously processed data
+        if self.args.use_saved:
+            print('Using pre-loaded dataset')
+            self.train_x, self.train_y, self.test_x, self.test_y = load_baseline_date(self.args.path['out_fold'], self.conf['task'])
+            return
+
+        # Load Corpus
+        print('Loading Corpus')
+        corpus = load_corpus(os.path.join(args.path['data_fold'], args.corpus_name))
+
         # Prepare Corpus
         print('Preparing Corpus')
-        vocab = corpus.prepare_corpus(
+        _ = corpus.prepare_corpus(
             self.conf
         )
         corpus.create_pos_ids(event_dist=300)
@@ -53,13 +52,15 @@ class Baseline:
         self.test_y = dataset.test_y
 
         # Save baseline data to file
-        save_baseline_data(self.train_x, self.train_y, self.test_x, self.test_y, self.args.path['out_fold'])
+        save_baseline_data(self.train_x, self.train_y, self.test_x, self.test_y, self.conf['task'], self.args.path['out_fold'])
 
     def train(self):
         if self.cls == 'rfc':
             clf = RandomForestClassifier(random_state=0)
         elif self.cls == 'nn':
             clf = MLPClassifier()
+        elif self.cls == 'svc':
+            clf = SVC(probability=True)
         else:
             exit(f'Classifier: {self.cls} not implemented')
 
@@ -68,10 +69,25 @@ class Baseline:
 
         # Print metric
         if self.conf['task'] in ['binary', 'category']:
-            probs = clf.predict_proba(self.test_x)[:, 1]
+            if self.conf['task'] == 'binary':
+                probs = clf.predict_proba(self.test_x)[:, 1]
+            else:
+                probs = clf.predict_proba(self.test_x)
             score = roc_auc_score(self.test_y, probs, multi_class='ovo')
-            print(f'{self.conf["metric"]}: {score}')
+            print(f'ROC-AUC: {score}')
 
-        elif self.task in ['real']:
+            preds = clf.predict(self.test_x)
+            score = accuracy_score(self.test_y, preds)
+            print(f'Acc: {score}')
+
+            if self.conf['task'] == 'binary':
+                score = f1_score(self.test_y, preds)
+            else:
+                score = f1_score(self.test_y, preds, average='macro')
+            print(f'F1 Score: {score}')
+
+        elif self.conf['task'] in ['real']:
             pass
 
+        print('Saving fitted model')
+        dump(clf, os.path.join(self.args.path['out_fold'], f'{self.cls}_{self.conf["task"]}.joblib'))

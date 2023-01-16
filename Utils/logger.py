@@ -49,20 +49,20 @@ class Logger:
     def log_sequence(self, name, value):
         self.run[name].log(value)
 
-    def log_values(self, metrics: dict):
-        for mode, metric in metrics.items():
-            for name, value in metric.items():
-                if math.isnan(float(value)):
-                    value = 0
-                self.run[f'{mode}-{name}'] = float(value)
+    def log_values(self, metrics: dict, mode: str):
+        for name, value in metrics.items():
+            self.run[f'{mode}-{name}'] = float(value)
 
-    def log_series(self, metrics: dict):
-        for mode, metric in metrics.items():
-            for name, value in metric.items():
-                if math.isnan(float(value)):
-                    value = 0
-                self.run[f'{mode}/{name}'].log(float(value))
-    
+    def log_metrics(self, metrics: dict, mode: str):
+        for name, value in metrics.items():
+            self.run[f'{mode}/{name}'].log(float(value))
+
+    def report_metrics(self, metrics: dict, mode: str):
+        metric_string = f'{mode}: '
+        for name, value in metrics.items():
+            metric_string += f'{name} {round(value, 3)}, '
+        print(metric_string)
+
     def metric2str(self, metric_dict):
         out = "[Evaluation metric]"
         for mode, score_dict in metric_dict.items():

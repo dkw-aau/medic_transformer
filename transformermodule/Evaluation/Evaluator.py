@@ -25,8 +25,8 @@ class Evaluator:
         for metric in self.metrics:
             if self.task == 'real':
                 if metric == 'mae':
-                    results[metric] = self.mean_absolute_error(preds, labs)
-            elif self.task in ('binary', 'm30'):
+                    results[metric] = self.mean_absolute_error(preds[:, :1], labs)
+            elif self.task in ['binary', 'm30']:
                 if metric == 'acc':
                     results[metric] = self.binary_acc(preds, labs)
                 if metric == 'f1':

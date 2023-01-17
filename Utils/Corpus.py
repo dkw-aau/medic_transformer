@@ -104,7 +104,7 @@ class Corpus:
 
         return labels
 
-    def create_train_evel_test_idx(self, train_size=0.8):
+    def create_train_evel_test_idx(self, task, train_size=0.8):
 
         # Sample indexes
         indexes = list(range(0, len(self.sequences)))
@@ -114,8 +114,15 @@ class Corpus:
 
         # Split data
         all_labels = self.get_labels()
-        train_idx, eval_idx, _, eval_labs = train_test_split(indexes, all_labels, stratify=all_labels, test_size=1-train_size, random_state=42)
-        eval_idx, test_idx = train_test_split(eval_idx, stratify=eval_labs, test_size=0.5, random_state=42)
+        if task in ['binary', 'category']:
+            # Use stratification
+            train_idx, eval_idx, _, eval_labs = train_test_split(indexes, all_labels, stratify=all_labels, test_size=1-train_size, random_state=42)
+            eval_idx, test_idx = train_test_split(eval_idx, stratify=eval_labs, test_size=0.5, random_state=42)
+        elif task in ['real']:
+            train_idx, eval_idx = train_test_split(indexes, test_size=1 - train_size, random_state=42)
+            eval_idx, test_idx = train_test_split(eval_idx, test_size=0.5, random_state=42)
+        else:
+            exit(f'Task: {task} not implemented for creating datsplit')
 
         self.train_idx = train_idx
         self.eval_idx = eval_idx

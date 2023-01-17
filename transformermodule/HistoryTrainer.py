@@ -30,8 +30,8 @@ class HistoryTrainer:
 
         # TODO: Implement AUC-ROC, AUC-PR, KAPPA, print confusion matrix
         self.conf = {
-            'task': 'category',
-            'metrics': ['f1', 'auc'],
+            'task': 'real',
+            'metrics': ['mae'],
             'binary_thresh': 2,
             'cats': [2, 7],
             'years': [2018, 2019, 2020, 2021],
@@ -46,7 +46,7 @@ class HistoryTrainer:
             self.conf
         )
         corpus.create_pos_ids(event_dist=300)
-        corpus.create_train_evel_test_idx(train_size=0.8)
+        corpus.create_train_evel_test_idx(task=self.conf['task'], train_size=0.8)
 
         # Select subset corpus
         train_x, evalu_x, test_x = corpus.split_train_eval_test()
@@ -100,7 +100,11 @@ class HistoryTrainer:
         self.logger.log_value('threshold', self.conf['binary_thresh'])
         self.logger.log_value('categories', self.conf['cats'])
 
-        stopper = EarlyStopping(self.args.patience, f'{os.path.join(self.args.path["out_fold"], self.conf["task"])}.pt')
+        stopper = EarlyStopping(
+            patience=self.args.patience,
+            save_path=f'{os.path.join(self.args.path["out_fold"], self.conf["task"])}.pt',
+            save_trained=self.args.save_model
+        )
 
         for e in range(0, epochs):
             train_loss, train_metrics = self.evaluation(self.trainloader)

@@ -158,7 +158,7 @@ class BertForMultiLabelPrediction(Bert.modeling.BertPreTrainedModel):
             loss = self.bce_loss(out.squeeze(), targets.squeeze())
         elif self.task == 'real':
             out = self.los_real(logits)  # variance attenuation loss https://arxiv.org/abs/2204.09308
-            loss = self.va_loss(out.squeeze(), targets.squeeze())
+            loss = self.va_loss(targets.squeeze(), out.squeeze())
         elif self.task == 'category':
             out = self.los_category(logits)  # CrossEntropyLoss()
             loss = self.ce_loss(out, targets.squeeze())

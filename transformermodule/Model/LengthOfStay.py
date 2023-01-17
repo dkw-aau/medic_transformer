@@ -1,6 +1,6 @@
 import os
 
-import torch
+import torch as th
 import torch.nn as nn
 import pytorch_pretrained_bert as Bert
 import numpy as np
@@ -83,7 +83,7 @@ class BertEmbeddings(nn.Module):
             for idx in np.arange(1, hidden_size, step=2):
                 lookup_table[pos, idx] = odd_code(pos, idx)
 
-        return torch.tensor(lookup_table)
+        return th.tensor(lookup_table)
 
 
 class BertModel(Bert.modeling.BertPreTrainedModel):
@@ -133,7 +133,7 @@ class BertForMultiLabelPrediction(Bert.modeling.BertPreTrainedModel):
         if self.task in ['binary', 'm30']:
             self.los_binary = nn.Linear(bert_conf.hidden_size, 1)
         elif self.task == 'real':
-            self.los_real = nn.Linear(bert_conf.hidden_size, 1)
+            self.los_real = nn.Linear(bert_conf.hidden_size, 2)  # Output = (μ, ln(σ))
         elif self.task == 'category':
             self.los_category = nn.Linear(bert_conf.hidden_size, len(cls_conf['cats']) + 1)
             nn.init.xavier_uniform_(self.los_category.weight)
@@ -143,7 +143,7 @@ class BertForMultiLabelPrediction(Bert.modeling.BertPreTrainedModel):
         self.is_loss_set = False
         self.sigmoid = nn.Sigmoid()
         self.bce_loss = nn.BCELoss()
-        self.l1_loss = nn.L1Loss()
+        self.va_loss = self.va_loss
         self.ce_loss = nn.CrossEntropyLoss(weight=class_weights)
 
     def forward(self, input_ids, posi_ids=None, age_ids=None, gender_ids=None, seg_ids=None, targets=None, attention_mask=None):
@@ -157,8 +157,8 @@ class BertForMultiLabelPrediction(Bert.modeling.BertPreTrainedModel):
             out = self.sigmoid(self.los_binary(logits))  # BCELoss
             loss = self.bce_loss(out.squeeze(), targets.squeeze())
         elif self.task == 'real':
-            out = self.los_real(logits)  # nn.L1Loss()
-            loss = self.l1_loss(out.squeeze(), targets.squeeze())
+            out = self.los_real(logits)  # variance attenuation loss https://arxiv.org/abs/2204.09308
+            loss = self.va_loss(out.squeeze(), targets.squeeze())
         elif self.task == 'category':
             out = self.los_category(logits)  # CrossEntropyLoss()
             loss = self.ce_loss(out, targets.squeeze())
@@ -166,3 +166,10 @@ class BertForMultiLabelPrediction(Bert.modeling.BertPreTrainedModel):
             exit(f'Task: {self.task} not implemented for BertModel')
 
         return loss, out
+
+    def va_loss(self, y_true, y_pred):  # variance attenuation
+        mu = y_pred[:, :1]  # first output neuron
+        log_sig = y_pred[:, 1:]  # second output neuron
+        sig = th.exp(log_sig)  # undo the log
+
+        return th.mean(2 * log_sig + ((y_true - mu) / sig) ** 2)

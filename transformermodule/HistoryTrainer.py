@@ -30,7 +30,7 @@ class HistoryTrainer:
 
         # TODO: Implement AUC-ROC, AUC-PR, KAPPA, print confusion matrix
         self.conf = {
-            'task': 'binary',
+            'task': 'category',
             'metrics': ['f1', 'auc'],
             'binary_thresh': 2,
             'cats': [2, 7],
@@ -86,9 +86,9 @@ class HistoryTrainer:
         self.model = model.to(args.device)
 
         # Initialize model parameters
-        if args.use_pretrained:
-            print(f'Loading state model with name: {args.load_name}')
-            self.model = load_state_dict(os.path.join(args.path['out_fold'], args.load_name), self.model)
+        #if args.use_pretrained:
+        #    print(f'Loading state model with name: {args.load_name}')
+        #    self.model = load_state_dict(os.path.join(args.path['out_fold'], args.load_name), self.model)
 
         self.optim = adam(params=list(self.model.named_parameters()), args=args)
 
@@ -100,7 +100,7 @@ class HistoryTrainer:
         self.logger.log_value('threshold', self.conf['binary_thresh'])
         self.logger.log_value('categories', self.conf['cats'])
 
-        stopper = EarlyStopping(self.args.patience, os.path.join(self.args.path['out_fold'], self.args.save_name))
+        stopper = EarlyStopping(self.args.patience, f'{os.path.join(self.args.path["out_fold"], self.conf["task"])}.pt')
 
         for e in range(0, epochs):
             train_loss, train_metrics = self.evaluation(self.trainloader)

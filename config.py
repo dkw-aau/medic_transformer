@@ -24,8 +24,6 @@ class Config:
 
         # File names
         self.corpus_name = conf.get('files', 'corpus_name')
-        self.load_name = conf.get('files', 'load_name')
-        self.save_name = conf.get('files', 'save_name')
 
         # Read Logger Arguments
         self.use_logging = conf.getboolean('neptune', 'use_logging', fallback=None)

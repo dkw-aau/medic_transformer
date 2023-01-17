@@ -1,19 +1,32 @@
 import os
 
 from joblib import dump, load
+from sklearn.metrics import roc_auc_score
 from torch.utils.data import DataLoader
 from torchmetrics import ROC
 import torch as th
 
-from Utils.utils import load_baseline_date, load_corpus, load_state_dict
+from Utils.utils import load_corpus, load_state_dict, set_seeds, load_baseline_date
 from config import Config
 from transformermodule.DataLoader.HistoryLoader import HistoryLoader
 from transformermodule.Evaluation.Evaluator import Evaluator
 import matplotlib.pyplot as plt
-from sklearn import metrics
 from transformermodule.Model.LengthOfStay import BertForMultiLabelPrediction
 from transformermodule.Model.utils import BertConfig
 from transformermodule.utils import get_model_config
+from sklearn import metrics
+
+
+def get_fpr_tpr(proba, labs, task='binary', tensor=False):
+    if tensor:
+        roc = ROC(task=task)
+        fpr, tpr, _ = roc(proba, labs)
+        fpr = fpr.cpu().numpy()
+        tpr = tpr.cpu().numpy()
+    else:
+        fpr, tpr, _ = metrics.roc_curve(labs, proba)
+
+    return fpr, tpr
 
 
 def get_bert_model_and_data(conf):
@@ -28,7 +41,6 @@ def get_bert_model_and_data(conf):
 
     # Select subset corpus
     _, _, test_x = corpus.split_train_eval_test()
-    _, _, test_y = corpus.split_train_eval_test_labels()
 
     # Setup dataloaders
     Dset = HistoryLoader(token2idx=vocab['token2index'], sequences=test_x, max_len=args.max_len_seq, conf=conf)
@@ -56,8 +68,8 @@ def get_bert_model_and_data(conf):
     model = model.to(args.device)
 
     # Initialize model parameters
-    print(f'Loading state model with name: {args.load_name}')
-    model = load_state_dict(os.path.join(args.path['out_fold'], f'{conf["task"]}_full.pt'), model)
+    print(f'Loading state model with name: {conf["task"]}.pt')
+    model = load_state_dict(f'{os.path.join(args.path["out_fold"], conf["task"])}.pt', model)
 
     return model, testloader
 
@@ -66,7 +78,6 @@ def evaluation(args, model, loader):
     model.eval()
     y_preds, y_label = None, None
     for step, (input_ids, posi_ids, age_ids, gender_ids, att_mask, labels, pat_ids) in enumerate(loader, 1):
-        model.eval()
 
         input_ids = input_ids.to(args.device)
         posi_ids = posi_ids.to(args.device)
@@ -89,10 +100,11 @@ if __name__ == '__main__':
     args = Config(
         file_path=config_file
     )
+    set_seeds(42)
 
     conf = {
-        'task': 'category',
-        'metric': 'f1',
+        'task': 'binary',
+        'metrics': ['auc'],
         'binary_thresh': 2,
         'cats': [2, 7],
         'years': [2018, 2019, 2020, 2021],
@@ -101,47 +113,51 @@ if __name__ == '__main__':
     }
 
     # Load all the sklearn models
-    #nn_binary = load(os.path.join(args.path['out_fold'], 'nn_binary.joblib'))
-    #rfc_binary = load(os.path.join(args.path['out_fold'], 'rfc_binary.joblib'))
-    #svc_binary = load(os.path.join(args.path['out_fold'], 'svc_binary.joblib'))
-    #nn_category = load(os.path.join(args.path['out_fold'], 'nn_category.joblib'))
-    #rfc_category = load(os.path.join(args.path['out_fold'], 'rfc_category.joblib'))
-    #svc_category = load(os.path.join(args.path['out_fold'], 'svc_category.joblib'))
+    if conf['task'] == 'binary':
+        nn_model = load(os.path.join(args.path['out_fold'], 'nn_binary.joblib'))
+        rfc_model = load(os.path.join(args.path['out_fold'], 'rfc_binary.joblib'))
+        svc_model = load(os.path.join(args.path['out_fold'], 'svc_binary.joblib'))
 
-    # Load the test data for sklearn models
-    #_, _, binary_test_x, binary_test_y = load_baseline_date(args.path['out_fold'], 'binary')
-    _, _, category_test_x, category_test_y = load_baseline_date(args.path['out_fold'], 'category')
+    elif conf['task'] == 'category':
+        nn_model = load(os.path.join(args.path['out_fold'], 'nn_category.joblib'))
+        rfc_model = load(os.path.join(args.path['out_fold'], 'rfc_category.joblib'))
+        svc_model = load(os.path.join(args.path['out_fold'], 'svc_category.joblib'))
 
     # Load the trained bert models
-    #binary_model, binary_loader = get_bert_model_and_data(conf)
-    category_model, category_loader = get_bert_model_and_data(conf)
+    th_model, th_loader = get_bert_model_and_data(conf)
 
-    #roc = ROC(task="category")
-    #y_preds_binary, y_label_binary = evaluation(args, binary_model, binary_loader)
-    y_preds_category, y_label_category = evaluation(args, category_model, category_loader)
+    # Load the test data for sklearn models
+    _, _, test_x, test_y = load_baseline_date(args.path['out_fold'], conf['task'])
+
+    # Create evaluator
     evaluator = Evaluator(conf=conf, device=args.device)
-    #metrics = evaluator.calculate_metrics(y_preds_binary, y_label_binary)
-    metrics = evaluator.calculate_metrics(y_preds_category, y_label_category)
-    print(metrics)
-    exit()
-    th_fpr, th_tpr, thresholds = roc(y_preds, y_label)
 
+    # Create probabilities
+    th_proba, th_test_y = evaluation(args, th_model, th_loader)
+    rfc_proba = rfc_model.predict_proba(test_x)[:, 1]
+    nn_proba = nn_model.predict_proba(test_x)[:, 1]
+    svc_proba = svc_model.predict_proba(test_x)[:, 1]
 
+    # Get model metrics
+    th_auc = evaluator.calculate_metrics(th_proba, th_test_y)['auc']
+    rfc_auc = roc_auc_score(test_y, rfc_proba, multi_class='ovo')
+    nn_auc = roc_auc_score(test_y, nn_proba, multi_class='ovo')
+    svc_auc = roc_auc_score(test_y, svc_proba, multi_class='ovo')
 
     # Extract fpr and tpr for each example
-    rfc_proba = rfc_binary.predict_proba(binary_test_x)[::, 1]
-    rfc_fpr, rfc_tpr, _ = metrics.roc_curve(binary_test_y, rfc_proba)
-    nn_proba = nn_binary.predict_proba(binary_test_x)[::, 1]
-    nn_fpr, nn_tpr, _ = metrics.roc_curve(binary_test_y, nn_proba)
-    svc_proba = svc_binary.predict_proba(binary_test_x)[::, 1]
-    svc_fpr, svc_tpr, _ = metrics.roc_curve(binary_test_y, svc_proba)
+    th_fpr, th_tpr = get_fpr_tpr(th_proba, th_test_y, tensor=True)
+    rfc_fpr, rfc_tpr = get_fpr_tpr(rfc_proba, test_y)
+    nn_fpr, nn_tpr = get_fpr_tpr(nn_proba, test_y)
+    svc_fpr, svc_tpr = get_fpr_tpr(svc_proba, test_y)
 
     # create ROC curve
-    plt.plot(rfc_fpr, rfc_tpr)
-    plt.plot(nn_fpr, nn_tpr)
-    plt.plot(svc_fpr, svc_tpr)
-    plt.plot(th_fpr.cpu().numpy(), th_tpr.cpu().numpy())
+    plt.plot(rfc_fpr, rfc_tpr, label=f'RFC AUROC = {round(rfc_auc, 2)}')
+    plt.plot(nn_fpr, nn_tpr, label=f'FFNN AUROC = {round(nn_auc, 2)}')
+    plt.plot(svc_fpr, svc_tpr, label=f'SVC AUROC = {round(svc_auc, 2)}')
+    plt.plot(th_fpr, th_tpr, label=f'EHR-BERT AUROC = {round(th_auc, 2)}')
+    plt.plot([0.0], [1.1])
     plt.ylabel('True Positive Rate')
     plt.xlabel('False Positive Rate')
+    plt.legend(loc='lower right')
 
-    plt.savefig(f'{args.path["out_fold"]}/roc_binary.png')
+    plt.savefig(f'{args.path["out_fold"]}/roc_{conf["task"]}.png')

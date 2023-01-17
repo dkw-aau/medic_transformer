@@ -27,18 +27,18 @@ class Corpus:
             tokens.update(seq.event_tokens)
 
         special_tokens = {
-            0: 'CLS',
-            1: 'UNK',
-            2: 'SEP',
-            3: 'PAD',
-            4: 'MASK'
+            'CLS',
+            'UNK',
+            'SEP',
+            'PAD',
+            'MASK'
         }
 
-        tokens.difference_update(set(special_tokens.values()))
+        all_tokens = sorted(list(tokens.union(special_tokens)))
 
-        index2token = special_tokens
-        token2index = {val: key for key, val in special_tokens.items()}
-        for index, token in enumerate(tokens, len(special_tokens)):
+        index2token = {}
+        token2index = {}
+        for index, token in enumerate(all_tokens):
             index2token[index] = token
             token2index[token] = index
 
@@ -114,8 +114,8 @@ class Corpus:
 
         # Split data
         all_labels = self.get_labels()
-        train_idx, eval_idx, _, eval_labs = train_test_split(indexes, all_labels, stratify=all_labels, test_size=1-train_size)
-        eval_idx, test_idx = train_test_split(eval_idx, stratify=eval_labs, test_size=0.5)
+        train_idx, eval_idx, _, eval_labs = train_test_split(indexes, all_labels, stratify=all_labels, test_size=1-train_size, random_state=42)
+        eval_idx, test_idx = train_test_split(eval_idx, stratify=eval_labs, test_size=0.5, random_state=42)
 
         self.train_idx = train_idx
         self.eval_idx = eval_idx

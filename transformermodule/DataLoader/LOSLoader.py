@@ -1,13 +1,11 @@
 import numpy as np
-from bisect import bisect
 from torch.utils.data.dataset import Dataset
-from transformermodule.utils import seq_padding, code2index, limit_seq_length, pad_position
+from Utils.utils import seq_padding, code2index, limit_seq_length, pad_position
 import torch as th
 
 
 class HistoryLoader(Dataset):
     def __init__(self, token2idx, sequences, max_len, task=None, scaler=None):
-        # TODO: Move all data to device in init (Potential train speedup?)
         self.vocab = token2idx
         self.max_len = max_len
         self.sequences = sequences
@@ -42,7 +40,7 @@ class HistoryLoader(Dataset):
             # pad code and label
             code = seq_padding(code, self.max_len, symbol=self.vocab['PAD'])
 
-            gender = [seq.gender] * self.max_len
+            gender = [seq.sex] * self.max_len
             age = [seq.age] * self.max_len
 
             self.codes.append(code)

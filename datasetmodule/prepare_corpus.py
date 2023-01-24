@@ -5,10 +5,7 @@ from datetime import timedelta
 from tqdm import tqdm
 import os
 
-from Utils.Corpus import Corpus
-from Utils.Sequence import Sequence
-from Utils.Tokenizer import Tokenizer
-from Utils.utils import save_corpus
+from datasetmodule.Tokenizer import Tokenizer
 
 
 def get_is_unspecific(diagnosis):
@@ -100,6 +97,60 @@ def prepare_typed_data(group_data, patient_id, start, end, labels):
         return None
 
 
+def tokenize_vitals(tokenizer, pd_vital):
+    return tokenizer.tokenize_vitals(pd_vital)
+
+
+def tokenize_diagnoses(tokenizer, pd_diag):
+    return tokenizer.tokenize_diagnoses(pd_diag)
+
+
+def tokenize_adm(tokenizer, pd_adm):
+    return tokenizer.tokenize_adm(pd_adm)
+
+
+def tokenize_procs(tokenizer, pd_procs):
+    return tokenizer.tokenize_procs(pd_procs)
+
+
+def tokenize_labs(tokenizer, pd_lab):
+    return tokenizer.tokenize_labs(pd_lab)
+
+
+def tokenize_apriori(tokenizer, apriori, apriori_names, ed_start):
+    token_apriori = tokenizer.tokenize_apriori(
+        apriori=apriori,
+        names=apriori_names,
+        ed_start=ed_start)
+    return token_apriori
+
+
+def create_patient_string(tok_apriori, tok_diag, tok_lab, tok_vital, tok_adm, tok_proc):
+    pd_combined = pd.DataFrame({'token': [], 'token_orig': [], 'event_time': [], 'event_type': [], 'event_value': []})
+    data_types = [
+        ('apriori', tok_apriori),
+        ('diag', tok_diag),
+        ('lab', tok_lab),
+        ('vital', tok_vital),
+        ('adm', tok_adm),
+        ('proc', tok_proc)]
+
+    for d_type, data in data_types:
+        data['event_type'] = d_type
+        pd_combined = pd.concat([pd_combined, data])
+
+    # Sort data
+    sorted_data = pd_combined.sort_values(by=['event_time'])
+
+    event_tok = sorted_data['token'].tolist()
+    event_tok_orig = sorted_data['token_orig'].tolist()
+    event_time = sorted_data['event_time'].tolist()
+    event_type = sorted_data['event_type'].tolist()
+    event_value = sorted_data['event_value'].tolist()
+
+    return event_tok, event_tok_orig, event_time, event_type, event_value
+
+
 def prepare_patients(max_sequences, corpus_file, data_path):
     # Load files
     forloeb_file = 'forloeb'
@@ -111,7 +162,6 @@ def prepare_patients(max_sequences, corpus_file, data_path):
     proc_file = 'proc'
 
     forloeb = pd.read_parquet(os.path.join(data_path, f'{forloeb_file}.parquet'))
-    forloeb = forloeb.sample(frac=1)
     diagnosis = pd.read_parquet(os.path.join(data_path, f'{diagnosis_file}.parquet'))
     labtests = pd.read_parquet(os.path.join(data_path, f'{labtest_file}.parquet'))
     vitals = pd.read_parquet(os.path.join(data_path, f'{vitals_file}.parquet'))
@@ -119,7 +169,7 @@ def prepare_patients(max_sequences, corpus_file, data_path):
     procs = pd.read_parquet(os.path.join(data_path, f'{proc_file}.parquet'))
     adm = pd.read_parquet(os.path.join(data_path, f'{adm_file}.parquet'))
 
-    # Sort on time for late optimization
+    # Sort on time for optimization
     diagnosis = diagnosis.sort_values(by=['event_time'])
     labtests = labtests.sort_values(by=['event_time'])
     vitals = vitals.sort_values(by=['event_time'])
@@ -136,7 +186,10 @@ def prepare_patients(max_sequences, corpus_file, data_path):
     adm = adm.groupby(by='patientid')
 
     # For saving all forloeb
-    sequence_list = []
+    all_data = pd.DataFrame({'token': [], 'token_orig': [], 'event_time': [], 'event_type': [], 'event_value': [], 'patient_id': []})
+    df_patients = pd.DataFrame({'patient_id': [], 'age': [], 'sex': [], 'hosp_start': [], 'los': []})
+
+    tokenizer = Tokenizer()
 
     index = 0
     for _, row in tqdm(forloeb.iterrows(), total=forloeb.shape[0]):
@@ -144,7 +197,6 @@ def prepare_patients(max_sequences, corpus_file, data_path):
         # Create new forloeb
         pat_id = row['patientid']
         ed_start = row['ankomst_ska']
-        ed_end = row['afgang_ska']
         hosp_end = row['afgang']
 
         # Demographic Patient Data
@@ -169,17 +221,10 @@ def prepare_patients(max_sequences, corpus_file, data_path):
 
         # Prescription Data
         pd_presc = prepare_typed_data(prescs, pat_id, ed_start - timedelta(days=730), hosp_end, ['event_time', 'atc_recept'])
-
         presc, presc_names = get_prescriptions(pd_presc)
 
         apriori = comorb + presc + extra + adm_time
         apriori_names = comorb_names + presc_names + extra_names + adm_time_names
-
-        mortality_30 = True if row['mortality_30'] == 1 else False
-        uns_diag = get_is_unspecific(row['last_diagnosis'])
-        req_hosp = True if ed_end != hosp_end else False
-        ed_length_of_stay = (ed_end - ed_start).total_seconds() / 60 / 60 / 24
-        hosp_length_of_stay = (hosp_end - ed_end).total_seconds() / 60 / 60 / 24
         length_of_stay = (hosp_end - ed_start).total_seconds() / 60 / 60 / 24
 
         # Prepare data types
@@ -189,47 +234,27 @@ def prepare_patients(max_sequences, corpus_file, data_path):
         pd_adm = prepare_typed_data(adm, pat_id, ed_start, hosp_end, ['event_time', 'event_code'])
         pd_procs = prepare_typed_data(procs, pat_id, ed_start, hosp_end, ['event_time', 'event_code'])
 
-        sequence = Sequence(
-            pat_id,
-            apriori,
-            apriori_names,
-            pd_lab,
-            pd_vitals,
-            pd_diag,
-            pd_adm,
-            pd_procs,
-            ed_start,
-            ed_end,
-            hosp_end,
-            ed_length_of_stay,
-            hosp_length_of_stay,
-            length_of_stay,
-            mortality_30,
-            req_hosp,
-            uns_diag,
-            age=demo[1],
-            gender=demo[0]
-        )
+        patient = {'patient_id': pat_id, 'age': demo[1], 'sex': demo[0], 'hosp_start': ed_start, 'los': length_of_stay}
+        df_patients.append(patient, ignore_index=True)
 
         # Tokenize and create patient string
-        sequence.tokenize_all()
-        sequence.create_patient_string(['apriori', 'diag', 'lab', 'vital', 'adm', 'proc'])
-        sequence.minimize()
+        tok_apriori = tokenize_apriori(tokenizer, apriori, apriori_names, ed_start)
+        tok_lab = tokenize_labs(tokenizer, pd_lab)
+        tok_vital = tokenize_vitals(tokenizer, pd_vitals)
+        tok_diag = tokenize_diagnoses(tokenizer, pd_diag)
+        tok_adm = tokenize_adm(tokenizer, pd_adm)
+        tok_proc = tokenize_procs(tokenizer, pd_procs)
 
-        # Check for None values in sequence
-        if None in sequence.event_tokens:
-            exit(f'None token part of sequence: {sequence.event_tokens}')
+        event_tok, event_tok_orig, event_time, event_type, event_value = create_patient_string(tok_apriori, tok_diag, tok_lab, tok_vital, tok_adm, tok_proc)
+        data = pd.DataFrame({'token': event_tok, 'token_orig': event_tok_orig, 'event_time': event_time, 'event_type': event_type, 'event_value': event_value, 'patient_id': [pat_id] * len(event_tok)})
 
-        sequence_list.append(sequence)
+        all_data = pd.concat([all_data, data])
 
         if index == max_sequences:
             break
         else:
             index += 1
 
-    print(Tokenizer.not_found)
-
-    print('Creating and saving Corpus')
-    corpus = Corpus(data_path, sequence_list)
-    corpus.make_corpus_df()
-    save_corpus(corpus, os.path.join(data_path, corpus_file))
+    # Make all_data and patients into parquet files
+    df_patients.to_parquet(os.path.join(data_path, 'patients.parquet'))
+    all_data.to_parquet(os.path.join(data_path, 'data.parquet'))

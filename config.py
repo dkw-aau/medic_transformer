@@ -51,7 +51,7 @@ class Config:
         self.weight_decay = conf.getfloat('optimization', 'weight_decay')
 
         # Training config
-        self.max_epochs = conf.getint('train_params', 'max_epochs')
+        self.epochs = conf.getint('train_params', 'epochs')
         self.batch_size = conf.getint('train_params', 'batch_size')
         self.max_len_seq = conf.getint('train_params', 'max_len_seq')
         use_gpu = conf.getboolean('train_params', 'use_gpu')

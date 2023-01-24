@@ -1,12 +1,8 @@
-import os
-
 import torch as th
 import torch.nn as nn
 from torch.nn.functional import sigmoid
 import pytorch_pretrained_bert as Bert
 import numpy as np
-
-from Utils.utils import load_state_dict
 
 
 class BertEmbeddings(nn.Module):
@@ -151,12 +147,9 @@ class MBERT(Bert.modeling.BertPreTrainedModel):
 
         if self.task == 'mlm':
             preds = self.cls(sequence_output)
-            if targets is not None:
-                loss_fct = nn.CrossEntropyLoss(ignore_index=-1)
-                masked_lm_loss = loss_fct(preds.view(-1, self.config.vocab_size), targets.view(-1))
-                return masked_lm_loss, preds.view(-1, self.config.vocab_size), targets.view(-1)
-            else:
-                return preds
+            loss_fct = nn.CrossEntropyLoss(ignore_index=-1)
+            loss = loss_fct(preds.view(-1, self.config.vocab_size), targets.view(-1))
+            return loss
 
         logits = self.dropout(pooled_output)
 

@@ -1,9 +1,11 @@
-from transformermodule.LOSTrainer import LOSTrainer
-from transformermodule.MLMTrainer import MLMTrainer
+from baselinemodule.Baseline import Baseline
 from Utils.utils import set_seeds
 from config import Config
 
 # Primary pipeline for training models on EHR sequences
+from transformermodule.Trainers.LOSTrainer import LOSTrainer
+from transformermodule.Trainers.MLMTrainer import MLMTrainer
+
 if __name__ == '__main__':
     config_file = ["config.ini"]
     args = Config(file_path=config_file)
@@ -13,7 +15,9 @@ if __name__ == '__main__':
         trainer = LOSTrainer(args)
     elif args.workload == 'mlm':
         trainer = MLMTrainer(args)
+    elif args.workload == 'base':
+        baseline = Baseline(args)
     else:
         exit(f'Task {args.workload} not Implemented')
 
-    trainer.train(args.max_epochs)
+    trainer.train()

@@ -12,7 +12,7 @@ import seaborn as sns
 from Utils.utils import load_corpus, load_state_dict, set_seeds, load_baseline_date
 from config import Config
 from transformermodule.DataLoader.LOSLoader import HistoryLoader
-from transformermodule.Evaluator import Evaluator
+from Utils.Evaluator import Evaluator
 import matplotlib.pyplot as plt
 from transformermodule.Model.MBERT import BertForMultiLabelPrediction
 from transformermodule.Model.utils import BertConfig

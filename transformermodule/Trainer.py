@@ -1,11 +1,11 @@
-from transformermodule.Evaluator import Evaluator
-from Utils.utils import load_corpus, load_state_dict
+from Utils.Corpus import Corpus
+from Utils.Evaluator import Evaluator
+from Utils.utils import load_state_dict
 from .DataLoader.LOSLoader import HistoryLoader
 from Utils.EarlyStopping import EarlyStopping
 from .DataLoader.MLMLoader import MLMLoader
 from torch.utils.data import DataLoader
-from .utils import get_model_config
-from .Model.utils import BertConfig
+from Utils.utils import get_model_config, BertConfig
 import pytorch_pretrained_bert as Bert
 from Utils.Scaler import Scaler
 from Utils.logger import Logger
@@ -20,6 +20,7 @@ class Trainer:
         self.path = args.path
         self.task = args.task
         self.device = args.device
+        self.epochs = args.epochs
         self.load_mlm = args.load_mlm
         self.workload = args.workload
         self.features = args.features
@@ -63,9 +64,10 @@ class Trainer:
             'num_classes': self.num_classes
         }
 
-        # TODO: Make the loading of a corpus faster...
         # Prepare corpus
-        self.corpus = load_corpus(os.path.join(args.path['data_fold'], args.corpus))
+        self.corpus = Corpus(
+            data_path=args.path['data_fold']
+        )
         self.vocab = self.corpus.prepare_corpus(self.corpus_conf)
 
         # Split data

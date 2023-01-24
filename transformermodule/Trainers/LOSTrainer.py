@@ -1,4 +1,4 @@
-from .Trainer import Trainer
+from transformermodule.Trainer import Trainer
 from tqdm import tqdm
 import torch as th
 import time
@@ -8,9 +8,9 @@ class LOSTrainer(Trainer):
     def __init__(self, args):
         super(LOSTrainer, self).__init__(args)
 
-    def train(self, epochs):
+    def train(self):
 
-        for e in range(0, epochs):
+        for e in range(0, self.epochs):
             train_loss, train_metrics = self.evaluation(self.train_loader)
             eval_loss, eval_metrics = self.evaluation(self.evalu_loader)
             train_metrics.update({'loss': train_loss})
@@ -42,7 +42,7 @@ class LOSTrainer(Trainer):
 
     def epoch(self, e):
         self.model.train()
-        tr_loss = 0
+        tr_loss, step = 0, 0
         epoch_time = time.time()
 
         loader_iter = tqdm(self.train_loader, ncols=120, position=0)
@@ -72,7 +72,7 @@ class LOSTrainer(Trainer):
 
     def evaluation(self, loader):
         self.model.eval()
-        tr_loss = 0
+        tr_loss, step = 0, 0
         y_preds, y_label = None, None
         for step, batch in enumerate(loader, 1):
             batch = tuple(t.to(self.args.device) for t in batch)

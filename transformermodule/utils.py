@@ -1,4 +1,51 @@
 import random
+import torch as th
+import pytorch_pretrained_bert as Bert
+
+
+class BertConfig(Bert.modeling.BertConfig):
+    def __init__(self, config):
+        super(BertConfig, self).__init__(
+            vocab_size_or_config_json_file=config.get('vocab_size'),
+            hidden_size=config['hidden_size'],
+            num_hidden_layers=config.get('num_hidden_layers'),
+            num_attention_heads=config.get('num_attention_heads'),
+            intermediate_size=config.get('intermediate_size'),
+            hidden_act=config.get('hidden_act'),
+            hidden_dropout_prob=config.get('hidden_dropout_prob'),
+            attention_probs_dropout_prob=config.get('attention_probs_dropout_prob'),
+            max_position_embeddings=config.get('max_position_embedding'),
+            initializer_range=config.get('initializer_range'),
+        )
+
+
+def get_model_config(vocab, args):
+    return {
+        'vocab_size': len(vocab['token2index'].keys()),  # num embeddings
+        'hidden_size': args['hidden_size'],  # word embedding and index embedding hidden size
+        'max_position_embedding': args['max_len_seq'],  # maximum number of tokens
+        'hidden_dropout_prob': args['layer_dropout'],  # dropout rate
+        'num_hidden_layers': args['num_hidden_layers'],  # number of multi-head attention layers required
+        'num_attention_heads': args['num_attention_heads'],  # number of attention heads
+        'attention_probs_dropout_prob': args['att_dropout'],  # multi-head attention dropout rate
+        'intermediate_size': args['intermediate_size'],  # the size of the "intermediate" layer in the transformer encoder
+        'hidden_act': args['hidden_act'],
+        # The non-linear activation function in the encoder and the pooler "gelu", 'relu', 'swish' are supported
+        'initializer_range': args['initializer_range'],  # parameter weight initializer range
+    }
+
+
+def load_model(path, model):
+    # load pretrained model and update weights
+    pretrained_dict = th.load(path)
+    model_dict = model.state_dict()
+    # 1. filter out unnecessary keys
+    pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+    # 2. overwrite entries in the existing state dict
+    model_dict.update(pretrained_dict)
+    # 3. load the new state dict
+    model.load_state_dict(model_dict)
+    return model
 
 
 def code2index(tokens, token2idx, mask_token=None):
@@ -85,19 +132,3 @@ def seq_padding(tokens, max_len, token2idx=None, symbol=None, unkown=True):
             else:
                 seq.append(token2idx.get(symbol))
     return seq
-
-
-def get_model_config(vocab, args):
-    return {
-        'vocab_size': len(vocab['token2index'].keys()),  # num embeddings
-        'hidden_size': args.hidden_size,  # word embedding and index embedding hidden size
-        'max_position_embedding': args.max_len_seq,  # maximum number of tokens
-        'hidden_dropout_prob': args.layer_dropout,  # dropout rate
-        'num_hidden_layers': args.num_hidden_layers,  # number of multi-head attention layers required
-        'num_attention_heads': args.num_attention_heads,  # number of attention heads
-        'attention_probs_dropout_prob': args.att_dropout,  # multi-head attention dropout rate
-        'intermediate_size': args.intermediate_size,  # the size of the "intermediate" layer in the transformer encoder
-        'hidden_act': args.hidden_act,
-        # The non-linear activation function in the encoder and the pooler "gelu", 'relu', 'swish' are supported
-        'initializer_range': args.initializer_range,  # parameter weight initializer range
-    }

@@ -1,3 +1,4 @@
+import math
 import os
 import time
 from bisect import bisect
@@ -6,7 +7,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from Utils.utils import load_corpus
 from config import Config
+from sklearn.preprocessing import MinMaxScaler, PowerTransformer
+from sklearn.preprocessing import QuantileTransformer
 import matplotlib.dates as mdates
+import seaborn as sns
 
 
 def time_names():
@@ -20,37 +24,63 @@ def time_names():
     return new_times, new_names
 
 
-def length_og_stay_plot(corpus, bins, cutoff_days, file_name='los_bins'):
-    fig, axs = plt.subplots(1, 1)
-    in_liers = [seq.length_of_stay for seq in corpus.sequences if 0 < seq.length_of_stay < cutoff_days]
-    out_liers = [seq.length_of_stay for seq in corpus.sequences if seq.length_of_stay >= cutoff_days]
-    zero_time = [seq.length_of_stay for seq in corpus.sequences if seq.length_of_stay == 0]
-
-    print(f'With a cutoff of {cutoff_days} days we get '
-          f'{len(in_liers)} samples and {len(out_liers)} outliers')
-    print(f'{len(zero_time)} patients did not have an admission, these are omitted from the plot\n')
-
-    axs.hist(in_liers, bins=bins)
-    axs.set_title(f'LOS for {len(in_liers)} patient sequences')
-    axs.set_ylabel('Num Sequences')
-    axs.set_xlabel('LOS Days')
-    plt.savefig(f'{args.path["out_fold"]}/{file_name}.png')
+def length_og_stay_plot(corpus, cutoff_days, file_name='los_bins'):
+    losses = [seq.length_of_stay for seq in corpus.sequences]
+    #out_liers = [seq.length_of_stay for seq in corpus.sequences if seq.length_of_stay >= cutoff_days]
+    #zero_time = [seq.length_of_stay for seq in corpus.sequences if seq.length_of_stay == 0]
 
 
-def length_og_stay_category_plot(corpus, categories, file_name='los_cat'):
+    #print(f'With a cutoff of {cutoff_days} days we get'
+    #      f'{len(in_liers)} samples and {len(out_liers)} outliers')
+    #print(f'{len(zero_time)} patients did not have an admission, these are omitted from the plot\n')
+
+    sns.set_theme()
+
+    bins = np.arange(0, 16, 1)
+
+    fig, ax = plt.subplots()
+    _, bins, patches = plt.hist(np.clip(losses, bins[0], bins[-1]), density=True, bins=bins)
+
+    xlabels = [str(int(x)) for x in bins[1:]]
+    xlabels[-1] += '+'
+
+    N_labels = len(xlabels)
+    plt.xlim([0, 16])
+    x_locations = np.arange(N_labels) + 0.5
+    x_locations[-1] += 0.2
+    plt.xticks(x_locations)
+    ax.set_xticklabels(xlabels)
+
+    ax.set_title(f'Hospital LOS', fontsize=20)
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    ax.set_ylabel('Density', fontsize=18)
+    ax.set_xlabel('Days', fontsize=18)
+    fig.subplots_adjust(left=0.15, bottom=0.15)
+    plt.setp(patches, linewidth=0)
+    fig.tight_layout()
+
+    plt.savefig(f'{args.path["out_fold"]}/{file_name}.eps', format='eps')
+
+
+def length_og_stay_category_plot(corpus, categories, label_names, file_name='los_cat'):
     bins = {}
     inliers = [bisect(categories, seq.length_of_stay) for seq in corpus.sequences]
     for i in range(0, len(categories) + 1):
         bins[i] = inliers.count(i)
 
+    sum_bins = sum(bins.values())
     fig, axs = plt.subplots()
-    axs.bar([str(x) for x in ['0'] + categories], bins.values())
+    axs.bar(label_names, [x / sum_bins for x in bins.values()])
 
-    axs.set_title(f'Label distribution for {len(inliers)} patient sequences')
-    axs.set_ylabel('Num Sequences')
-    axs.set_xlabel('Classes')
+    sns.set_theme()
 
-    plt.savefig(f'{args.path["out_fold"]}/{file_name}.png')
+    axs.set_title(f'Categorical LOS', fontsize=20)
+    axs.set_ylabel('Density', fontsize=18)
+    axs.tick_params(axis='both', which='major', labelsize=14)
+    axs.set_xlabel('Days', fontsize=18)
+    fig.subplots_adjust(left=0.15, bottom=0.15)
+
+    plt.savefig(f'{args.path["out_fold"]}/{file_name}.eps', format='eps')
 
 
 def hist_seq_len(corpus, bins, cutoff_len, file_name='seq_len'):
@@ -64,11 +94,13 @@ def hist_seq_len(corpus, bins, cutoff_len, file_name='seq_len'):
     print(f'{len(outliers)} outliers')
     print(f'Mean sequence length of inliers: {sum(inliers) / len(inliers)}\n')
 
+    sns.set_theme()
+
     fig, axs = plt.subplots(1, 1)
     axs.hist(inliers, bins=bins)
-    axs.set_title(f'Sequence length of {len(inliers)} inliers')
-    axs.set_ylabel('Num Sequences')
-    axs.set_xlabel('Sequence Length')
+    axs.set_title(f'Length of Patient Sequences', fontsize=20)
+    axs.set_ylabel('Number of Sequences', fontsize=16)
+    axs.set_xlabel('Number of Token Events', fontsize=16)
     plt.savefig(f'{args.path["out_fold"]}/{file_name}.png')
 
 
@@ -282,24 +314,26 @@ if __name__ == '__main__':
     }
 
     # Load corpus
+    print('Loading Corpus')
     corpus = load_corpus(os.path.join(args.path['data_fold'], args.corpus_name))
+
+    print('Preparing Corpus')
     corpus.prepare_corpus(
         conf
     )
-    corpus.create_pos_ids(event_dist=60)
+    corpus.create_pos_ids(event_dist=300)
 
     # Plot a sequence
     #dates, tokens = time_names()
     #plot_sequence(corpus, 0, tokens, dates)
 
-
-
     # Length of stay
-    length_og_stay_plot(corpus, bins=50, cutoff_days=14, file_name=f'los_bins_{conf["max_hours"]}')
-    length_og_stay_category_plot(corpus, categories=[1, 2, 3, 4, 5, 6, 7, 14], file_name=f'los_cat_{conf["max_hours"]}_hours')
+    length_og_stay_plot(corpus, cutoff_days=14, file_name=f'los_bins_{conf["max_hours"]}')
+
+    length_og_stay_category_plot(corpus, categories=[2, 7], label_names=['<2', '2-7', '>7'], file_name=f'los_cat_{conf["max_hours"]}_hours')
 
     # Sequence lengths
-    hist_seq_len(corpus, bins=50, cutoff_len=256, file_name=f'seq_len_{conf["max_hours"]}')
+    hist_seq_len(corpus, bins=15, cutoff_len=256, file_name=f'seq_len_{conf["max_hours"]}')
 
     # Token distribution
     token_distribution(corpus, bins=200, cutoff_min=0, cutoff_max=20000, file_name='token_dist_all')

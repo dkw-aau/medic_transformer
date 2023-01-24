@@ -1,14 +1,16 @@
 from multiprocessing import freeze_support
 from torch.utils.data import DataLoader
-from .Model.MLMModel import BertForMaskedLM
+
+from Utils.EarlyStopping import EarlyStopping
+from transformermodule.Evaluator import Evaluator
+from .Model.MBERT import MBERT
 from .utils import get_model_config
 from .DataLoader.MLMLoader import MLMLoader
 from .Model.utils import BertConfig
 from .Model.optimiser import adam
-from Utils.utils import load_corpus, save_model_state, create_folder
+from Utils.utils import load_corpus, create_folder
 from tqdm import tqdm
 import warnings
-import time
 import os
 
 
@@ -19,60 +21,114 @@ class MLMTrainer:
 
         self.args = args
         freeze_support()
+        self.args = args
+        self.logger = self.args.logger
         warnings.filterwarnings(action='ignore')
         create_folder(args.path['out_fold'])
 
+        # TODO: Implement AUC-ROC, AUC-PR, KAPPA, print confusion matrix
+        self.conf = {
+            'task': 'mlm',
+            'metrics': ['auc', 'f1'],
+            'binary_thresh': 2,
+            'cats': [2, 7],
+            'years': [2018, 2019, 2020, 2021],
+            'types': ['apriori', 'adm', 'proc', 'vital', 'lab'],
+            # 'apriori', 'vital', 'diag', 'apriori', 'adm', 'proc', 'lab'
+            'max_hours': 24
+        }
+
         # Load corpus
         corpus = load_corpus(os.path.join(args.path['data_fold'], args.corpus_name))
-        corpus = corpus.get_subset_by_min_hours(min_hours=24)
-        corpus.cut_sequences_by_hours(hours=24)
-        corpus.substract_los_hours(hours=24)
-        train, _, _ = corpus.get_data_split()
-        vocab = corpus.get_vocabulary()
+
+        vocab = corpus.prepare_corpus(
+            self.conf
+        )
+        corpus.create_pos_ids(event_dist=300)
+        corpus.create_train_evel_test_idx(train_size=0.8)
+
+        # Select subset corpus
+        train_x, _, _ = corpus.split_train_eval_test()
+
+        # Setup Evaluator
+        self.evaluator = Evaluator(conf=self.conf, device=self.args.device)
 
         # Setup dataloader
-        Dset = MLMLoader(train, vocab['token2index'], max_len=args.max_len_seq)
+        Dset = MLMLoader(
+            token2idx=vocab['token2index'],
+            sequences=train_x,
+            max_len=args.max_len_seq)
+
         self.trainload = DataLoader(dataset=Dset, batch_size=args.batch_size, shuffle=True, num_workers=0)
 
-        # Create Bert Model
         model_config = get_model_config(vocab, args)
-        conf = BertConfig(model_config)
         feature_dict = {
             'word': True,
             'position': True,
-            'seg': True
+            'age': True,
+            'gender': True,
+            'seg': False
         }
-        model = BertForMaskedLM(conf, feature_dict)
+        bert_conf = BertConfig(model_config)
+
+        # Setup Model
+        model = MBERT(
+            args=args,
+            bert_conf=bert_conf,
+            feature_dict=feature_dict,
+            cls_conf=self.conf)
+
         self.model = model.to(args.device)
-        self.optim = adam(params=list(model.named_parameters()), args=args)
+
+        self.optim = adam(params=list(self.model.named_parameters()), args=args)
 
     def train(self, epochs):
-        for e in range(0, epochs):
-            e_loss, e_time = self.epoch(e)
-            print(f'Loss: {round(e_loss, 3)}, Time: {round(e_time, 3)}')
 
-    def epoch(self, e):
+        # Start Logger
+        self.logger.start_log()
+        self.logger.log_value('Experiment', self.args.experiment_name)
+
+        # Create earlystopper
+        stopper = EarlyStopping(
+            patience=self.args.patience,
+            save_path=f'{os.path.join(self.args.path["out_fold"], self.conf["task"])}.pt',
+            save_trained=self.args.save_model
+        )
+
+        for e in range(0, epochs):
+            e_loss = self.epoch()
+
+            # Log loss
+            self.logger.log_metrics({'loss': e_loss}, 'train')
+
+            print(f'Loss: {e_loss}')
+            if stopper.step(e_loss, self.model):
+                self.logger.info('Early Stop!\tEpoch:' + str(e))
+                break
+
+    def epoch(self):
         tr_loss = 0
-        epoch_time = time.time()
 
         loader_iter = tqdm(self.trainload)
         for step, batch in enumerate(loader_iter, 1):
-            step_time = time.time()
             batch = tuple(t.to(self.args.device) for t in batch)
-            input_ids, posi_ids, seg_ids, attMask, masked_label = batch
-            loss, pred, label = self.model(input_ids, posi_ids, seg_ids, attention_mask=attMask, masked_lm_labels=masked_label)
+            input_ids, posi_ids, age_ids, gender_ids, attMask, label, idx = batch
+
+            loss, pred, label = self.model(
+                input_ids=input_ids,
+                posi_ids=posi_ids,
+                age_ids=age_ids,
+                gender_ids=gender_ids,
+                attention_mask=attMask,
+                targets=label
+            )
 
             loss.backward()
 
             tmp_loss = loss.item()
             tr_loss += tmp_loss
 
-            # prec = cal_acc(label, pred)
-            loader_iter.set_postfix({'epoch': e, 'loss': tr_loss / step})
-
             self.optim.step()
             self.optim.zero_grad()
 
-        save_model_state(self.model, self.args.path['out_fold'], self.args.pretrain_name)
-
-        return tr_loss / step,  time.time() - epoch_time
+        return tr_loss / step

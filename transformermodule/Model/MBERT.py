@@ -2,6 +2,7 @@ import os
 
 import torch as th
 import torch.nn as nn
+from torch.nn.functional import sigmoid
 import pytorch_pretrained_bert as Bert
 import numpy as np
 
@@ -12,52 +13,41 @@ class BertEmbeddings(nn.Module):
     """Construct the embeddings from word, segment, age
     """
 
-    def __init__(self, config, feature_dict=None):
+    def __init__(self, config, features=None):
         super(BertEmbeddings, self).__init__()
 
-        self.feature_dict = feature_dict
+        self.features = features
 
-        if feature_dict['word']:
+        if 'word' in features:
             self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
-            nn.init.xavier_uniform_(self.word_embeddings.weight)
 
-        if feature_dict['seg']:
-            self.segment_embeddings = nn.Embedding(2, config.hidden_size)
-            nn.init.xavier_uniform_(self.segment_embeddings.weight)
-
-        if feature_dict['age']:
+        if 'age' in features:
             self.age_embeddings = nn.Embedding(120, config.hidden_size)
-            nn.init.xavier_uniform_(self.age_embeddings.weight)
 
-        if feature_dict['gender']:
+        if 'gender' in features:
             self.gender_embeddings = nn.Embedding(2, config.hidden_size)
-            nn.init.xavier_uniform_(self.gender_embeddings.weight)
 
-        if feature_dict['position']:
+        if 'position' in features:
             self.posi_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size). \
             from_pretrained(embeddings=self._init_posi_embedding(config.max_position_embeddings, config.hidden_size))
 
         self.LayerNorm = Bert.modeling.BertLayerNorm(config.hidden_size, eps=1e-12)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def forward(self, word_ids, seg_ids, posi_ids, age_ids, gender_ids):
+    def forward(self, word_ids, posi_ids, age_ids, gender_ids):
         embeddings = self.word_embeddings(word_ids)
 
-        if self.feature_dict['position']:
+        if 'position' in self.features:
             posi_embeddings = self.posi_embeddings(posi_ids)
             embeddings = embeddings + posi_embeddings
 
-        if self.feature_dict['age']:
+        if 'age' in self.features:
             age_embeddings = self.age_embeddings(age_ids)
             embeddings = embeddings + age_embeddings
 
-        if self.feature_dict['gender']:
+        if 'gender' in self.features:
             gender_embeddings = self.gender_embeddings(gender_ids)
             embeddings = embeddings + gender_embeddings
-
-        if self.feature_dict['seg']:
-            segment_embed = self.segment_embeddings(seg_ids)
-            embeddings = embeddings + segment_embed
 
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
@@ -87,15 +77,14 @@ class BertEmbeddings(nn.Module):
 
 
 class BertModel(Bert.modeling.BertPreTrainedModel):
-    def __init__(self, config, feature_dict):
+    def __init__(self, config, features):
         super(BertModel, self).__init__(config)
-        self.embeddings = BertEmbeddings(config=config, feature_dict=feature_dict)
+        self.embeddings = BertEmbeddings(config=config, features=features)
         self.encoder = Bert.modeling.BertEncoder(config=config)
         self.pooler = Bert.modeling.BertPooler(config)
         self.apply(self.init_bert_weights)
 
-    def forward(self, input_ids, seg_ids, posi_ids, age_ids, gender_ids, attention_mask,
-                output_all_encoded_layers=True):
+    def forward(self, input_ids, posi_ids, age_ids, gender_ids, attention_mask, output_all_encoded_layers=True):
 
         # We create a 3D attention mask from a 2D tensor mask.
         # Sizes are [batch_size, 1, 1, to_seq_length]
@@ -112,10 +101,11 @@ class BertModel(Bert.modeling.BertPreTrainedModel):
         extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype)  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
-        embedding_output = self.embeddings(input_ids, seg_ids, posi_ids, age_ids, gender_ids)
-        encoded_layers = self.encoder(embedding_output,
-                                      extended_attention_mask,
-                                      output_all_encoded_layers=output_all_encoded_layers)
+        embedding_output = self.embeddings(input_ids, posi_ids, age_ids, gender_ids)
+        encoded_layers = self.encoder(
+            embedding_output,
+            extended_attention_mask,
+            output_all_encoded_layers=output_all_encoded_layers)
         sequence_output = encoded_layers[-1]
         pooled_output = self.pooler(sequence_output)
         if not output_all_encoded_layers:
@@ -123,53 +113,72 @@ class BertModel(Bert.modeling.BertPreTrainedModel):
         return encoded_layers, pooled_output
 
 
-class BertForMultiLabelPrediction(Bert.modeling.BertPreTrainedModel):
-    def __init__(self, args, bert_conf, feature_dict, cls_conf, class_weights=None):
-        super(BertForMultiLabelPrediction, self).__init__(bert_conf)
-        self.task = cls_conf['task']
-        self.bert = BertModel(bert_conf, feature_dict)
+class MBERT(Bert.modeling.BertPreTrainedModel):
+    def __init__(self, bert_conf, workload, features, task, scaler, num_classes):
+        super(MBERT, self).__init__(bert_conf)
+        self.task = task
+        self.scaler = scaler
+        self.num_classes = num_classes
+        self.workload = workload
+
+        self.mbert = BertModel(bert_conf, features)
         self.dropout = nn.Dropout(bert_conf.hidden_dropout_prob)
+        self.scaler = scaler
 
-        if self.task in ['binary', 'm30']:
-            self.los_binary = nn.Linear(bert_conf.hidden_size, 1)
+        # Pretraining cls head
+        if self.workload == 'mlm':
+            self.cls = Bert.modeling.BertOnlyMLMHead(bert_conf, self.mbert.embeddings.word_embeddings.weight)
+        elif self.task == 'binary':
+            self.cls = nn.Linear(bert_conf.hidden_size, 1)
         elif self.task == 'real':
-            self.los_real = nn.Linear(bert_conf.hidden_size, 2)  # Output = (μ, ln(σ))
+            self.cls_mean = th.nn.Linear(bert_conf.hidden_size, 1)  # mean
+            self.cls_std = th.nn.Linear(bert_conf.hidden_size, 1)  # std
         elif self.task == 'category':
-            self.los_category = nn.Linear(bert_conf.hidden_size, len(cls_conf['cats']) + 1)
-            nn.init.xavier_uniform_(self.los_category.weight)
-            nn.init.zeros_(self.los_category.bias)
+            self.cls = nn.Linear(bert_conf.hidden_size, num_classes)
 
+        # Initialize weights
         self.apply(self.init_bert_weights)
-        self.is_loss_set = False
-        self.sigmoid = nn.Sigmoid()
-        self.bce_loss = nn.BCELoss()
-        self.va_loss = self.va_loss
-        self.ce_loss = nn.CrossEntropyLoss(weight=class_weights)
 
-    def forward(self, input_ids, posi_ids=None, age_ids=None, gender_ids=None, seg_ids=None, targets=None, attention_mask=None):
+        self.bce_loss = nn.BCELoss()
+        self.mse_loss = nn.MSELoss()
+        self.ce_loss = nn.CrossEntropyLoss()
+        self.ne_loss = self.neg_log_loss
+        self.jitter = 1e-6
+
+    def forward(self, input_ids, posi_ids=None, age_ids=None, gender_ids=None, targets=None, attention_mask=None):
         # Bert part of the model
-        _, pooled_output = self.bert(input_ids, seg_ids, posi_ids, age_ids, gender_ids, attention_mask, output_all_encoded_layers=False)
+        sequence_output, pooled_output = self.mbert(input_ids, posi_ids, age_ids, gender_ids, attention_mask, output_all_encoded_layers=False)
+
+        if self.task == 'mlm':
+            preds = self.cls(sequence_output)
+            if targets is not None:
+                loss_fct = nn.CrossEntropyLoss(ignore_index=-1)
+                masked_lm_loss = loss_fct(preds.view(-1, self.config.vocab_size), targets.view(-1))
+                return masked_lm_loss, preds.view(-1, self.config.vocab_size), targets.view(-1)
+            else:
+                return preds
+
         logits = self.dropout(pooled_output)
 
-        loss, out = None, None
         # Classification heads part of model
-        if self.task in ['binary', 'm30']:
-            out = self.sigmoid(self.los_binary(logits))  # BCELoss
+        loss, out = None, None
+        if self.task == 'binary':
+            out = sigmoid(self.cls(logits))
             loss = self.bce_loss(out.squeeze(), targets.squeeze())
-        elif self.task == 'real':
-            out = self.los_real(logits)  # variance attenuation loss https://arxiv.org/abs/2204.09308
-            loss = self.va_loss(targets.squeeze(), out.squeeze())
         elif self.task == 'category':
-            out = self.los_category(logits)  # CrossEntropyLoss()
+            out = self.cls(logits)
             loss = self.ce_loss(out, targets.squeeze())
+        elif self.task == 'real':
+            # Compute mean and std layers
+            mean = self.cls_mean(logits)
+            std = th.nn.functional.softplus(self.cls_std(logits)) + self.jitter
+            out = th.distributions.Normal(mean, std)
+            loss = self.ne_loss(out, targets)
         else:
             exit(f'Task: {self.task} not implemented for BertModel')
 
         return loss, out
 
-    def va_loss(self, y_true, y_pred):  # variance attenuation
-        mu = y_pred[:, :1]  # first output neuron
-        log_sig = y_pred[:, 1:]  # second output neuron
-        sig = th.exp(log_sig)  # undo the log
-
-        return th.mean(2 * log_sig + ((y_true - mu) / sig) ** 2)
+    def neg_log_loss(self, preds, target):
+        neg_log_likelihood = -preds.log_prob(target)
+        return th.mean(neg_log_likelihood)

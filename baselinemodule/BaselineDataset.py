@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn.feature_selection import chi2
+from sklearn.feature_selection import chi2, f_regression
 from sklearn.feature_selection import SelectKBest
 
 
@@ -20,13 +20,15 @@ class BaselineDataset:
         self.strategy = args.strategy
         self.imputation = args.imputation
         self.imputation = args.imputation
-        self.sequences = corpus.sequences
+        self.corpus = corpus
         self.scaler = args.scaler
         self.feature_select = args.feature_select
         self.conf = conf
         self.tokens = None
-        self.data_x = []
-        self.data_y = []
+        self.train_x = None
+        self.train_y = None
+        self.test_x = None
+        self.test_y = None
 
         # Get distinct token types
         print("Getting distinct tokens")
@@ -40,12 +42,12 @@ class BaselineDataset:
         print('Extracting samples from sequences')
         self.extract_samples()
 
-        print('Setting up label task')
-        self.data_y = self.setup_label_task()
-
         # Split samples
         print('Splitting data into train and test')
-        self.train_x, self.test_x, self.train_y, self.test_y = self.split_train_test(train_size=0.8)
+        self.train_x, _, self.test_x = self.corpus.split_train_eval_test()
+
+        print('Splitting samples into data and labels')
+        self.train_x, self.train_y, self.test_x, self.test_y = self.split_data()
 
         # Do data imputation
         print('Imputing missing values')
@@ -58,24 +60,40 @@ class BaselineDataset:
         print('Feature selection')
         self.train_x, self.test_x = self.feature_reduct()
 
+    def split_data(self):
+        train_x = []
+        train_y = []
+        for seq in self.train_x:
+            train_x.append(seq.data_x)
+            train_y.append(seq.label)
+
+        test_x = []
+        test_y = []
+        for seq in self.test_x:
+            test_x.append(seq.data_x)
+            test_y.append(seq.label)
+
+        return train_x, train_y, test_x, test_y
+
     def feature_reduct(self):
         if self.feature_select == 'chi2':
             chi2_selector = SelectKBest(chi2, k=50)
             chi2_selector.fit(self.train_x, self.train_y)
             train_x = chi2_selector.transform(self.train_x)
             test_x = chi2_selector.transform(self.test_x)
+        elif self.feature_select == 'f_reg':
+            fs = SelectKBest(score_func=f_regression, k=50)
+            # learn relationship from training data
+            fs.fit(self.train_x, self.train_y)
+            # transform train input data
+            train_x = fs.transform(self.train_x)
+            # transform test input data
+            test_x = fs.transform(self.test_x)
         else:
             train_x = self.train_x
             test_x = self.test_x
 
         return train_x, test_x
-
-    def setup_label_task(self):
-        data_y = []
-        for seq in self.sequences:
-            data_y.append(seq.label)
-
-        return data_y
 
     def scale(self):
         if self.scaler == 'standard':
@@ -110,10 +128,15 @@ class BaselineDataset:
         return train, test
 
     def extract_samples(self):
-        for seq in self.sequences:
+        for seq in self.corpus.sequences:
             sample = []
             for token in self.tokens:
-                if self.strategy == 'min-max':
+                if self.strategy == 'last':
+                    if token in seq.token_value_dict:
+                        sample.append(seq.token_value_dict[token])
+                    else:
+                        sample.append(np.nan)
+                elif self.strategy == 'min-max':
                     if token in seq.token_value_dict:
                         sample.append(max(seq.token_value_dict[token]))
                         sample.append(min(seq.token_value_dict[token]))
@@ -137,12 +160,12 @@ class BaselineDataset:
                         sample.append(np.nan)
                 else:
                     exit('Strategy not implemented')
-            self.data_x.append(sample)
-            self.data_y.append(seq.length_of_stay)
+
+            seq.data_x = sample
 
     def get_distinct_orig_tokens(self):
         tokens = set()
-        for seq in self.sequences:
+        for seq in self.corpus.sequences:
             tokens.update(set(seq.event_tokens_orig))
 
         # Remove some tokens from the set
@@ -154,15 +177,6 @@ class BaselineDataset:
         self.tokens = tokens
 
     def group_sequence_values(self):
-        for seq in self.sequences:
-            seq.group_token_values(self.tokens)
+        for seq in self.corpus.sequences:
+            seq.group_token_values()
 
-    def split_train_test(self, train_size=0.8):
-        train_x, test_x, train_y, test_y = train_test_split(self.data_x, self.data_y, stratify=self.data_y, test_size=1-train_size, random_state=42)
-        return train_x, test_x, train_y, test_y
-
-    def split_train_eval_test(self, train_size):
-        train, eval = train_test_split(self.data_x, self.data_y, stratify=self.data_y, test_size=1 - train_size, random_state=42)
-        eval, test = train_test_split(eval, test_size=0.5, random_state=42)
-
-        return train, eval, test

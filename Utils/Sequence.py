@@ -152,18 +152,17 @@ class Sequence:
     def minus_los(self, hours):
         self.length_of_stay = (self.length_of_stay * 24 - hours) / 24
 
-    def group_token_values(self, tokens):
+    def group_token_values(self):
         token_value_dict = {}
-        for token, value in zip(self.event_tokens_orig, self.event_values):
-            if token in tokens:
-                if token in token_value_dict:
-                    token_value_dict[token].append(value)
-                else:
-                    token_value_dict[token] = [value]
+        for token, value in zip(reversed(self.event_tokens_orig), reversed(self.event_values)):
+            if token in token_value_dict:
+                continue
+            else:
+                token_value_dict[token] = value
 
         # Add age and gender
-        token_value_dict['age'] = [self.age]
-        token_value_dict['gender'] = [self.gender]
+        token_value_dict['age'] = self.age
+        token_value_dict['gender'] = self.gender
         self.token_value_dict = token_value_dict
 
     def create_label(self, conf):
@@ -176,10 +175,16 @@ class Sequence:
             lab = bisect(conf['cats'], self.length_of_stay)
         elif conf['task'] == 'm30':
             lab = 1 if self.mortality_30 else 0
+        elif conf['task'] == 'mlm':
+            lab = None
         else:
             exit(f'Task: {conf["task"]} not implemented for sequence')
 
         self.label = lab
+
+    def clip_los(self, clip_days):
+        if self.length_of_stay > clip_days:
+            self.length_of_stay = clip_days
 
     def remove_indexes(self, indexes):
         for index in sorted(indexes, reverse=True):

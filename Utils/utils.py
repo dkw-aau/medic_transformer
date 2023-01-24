@@ -1,6 +1,8 @@
 import os
 import pickle
 import random
+import time
+
 import numpy as np
 import pandas as pd
 import torch as th
@@ -9,16 +11,6 @@ import torch as th
 def save_model(save_path, model):
     model.eval()
     th.save(model.state_dict(), save_path)
-
-
-def load_model(save_path, model):
-    model.load_state_dict(th.load(save_path))
-
-
-def load_state_dict(path, model):
-    state_dict = th.load(path)
-    model.load_state_dict(state_dict)
-    return model
 
 
 def save_model_state(model, file_path):
@@ -43,10 +35,18 @@ def save_corpus(corpus, file_name):
 
 
 def load_corpus(file_name):
+    print('Loading Corpus')
+    start = time.time()
     corpus = pickle_load(f'{file_name}.pkl')
+    print(f'load_pickle took: {time.time() - start}')
+    start = time.time()
     corpus_df = pd.read_parquet(f'{file_name}.parquet')
+    print(f'load_corpus_df took: {time.time() - start}')
+    start = time.time()
     corpus.corpus_df = corpus_df
     corpus.unpack_corpus_df()
+    print(f'unpacking corpus_df took: {time.time() - start}')
+
     return corpus
 
 
@@ -93,9 +93,10 @@ def set_seeds(seed):
     random.seed(seed)
     th.manual_seed(1234)
 
-"""def load_model(path, model):
+
+def load_state_dict(path, model):
     # load pretrained model and update weights
-    pretrained_dict = torch.load(path, map_location='cpu')
+    pretrained_dict = th.load(path, map_location='cpu')
     model_dict = model.state_dict()
     # 1. filter out unnecessary keys
     pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
@@ -103,5 +104,6 @@ def set_seeds(seed):
     model_dict.update(pretrained_dict)
     # 3. load the new state dict
     model.load_state_dict(model_dict)
+
     return model
-"""
+

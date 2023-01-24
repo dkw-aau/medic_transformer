@@ -27,7 +27,7 @@ class Logger:
         self.api_token = config.neptune_api_token
 
     def start_log(self):
-        self.run = neptune.init(
+        self.run = neptune.init_run(
             project=self.project_id,
             api_token=self.api_token,
             mode=self.run_mode

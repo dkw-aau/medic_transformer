@@ -1,8 +1,9 @@
 import copy
+import math
 import os
 import datetime
 import random
-from bisect import bisect
+import time
 
 import numpy as np
 import pandas as pd
@@ -20,6 +21,7 @@ class Corpus:
         self.eval_idx = None
         self.test_idx = None
         self.sequences = None
+        self.scaler = None
 
     def create_vocabulary(self):
         tokens = set()
@@ -104,25 +106,30 @@ class Corpus:
 
         return labels
 
-    def create_train_evel_test_idx(self, task, train_size=0.8):
+    def create_train_evel_test_idx(self, train_size=0.8, task=None):
 
         # Sample indexes
         indexes = list(range(0, len(self.sequences)))
 
-        # Randomize examples
+        # Shuffle examples
         random.shuffle(indexes)
+        sequences = list(np.array(self.sequences)[indexes])
+
+        stratify = True
+        labels = [seq.label for seq in sequences]
+        if task == 'real':
+            # Make stratification on bins of 5 days
+            labels = [int(math.floor(los / 5)) for los in labels]
+            min_group = min([labels.count(num) for num in set(labels)])
+            stratify = True if min_group >= 10 else False
 
         # Split data
-        all_labels = self.get_labels()
-        if task in ['binary', 'category']:
-            # Use stratification
-            train_idx, eval_idx, _, eval_labs = train_test_split(indexes, all_labels, stratify=all_labels, test_size=1-train_size, random_state=42)
-            eval_idx, test_idx = train_test_split(eval_idx, stratify=eval_labs, test_size=0.5, random_state=42)
-        elif task in ['real']:
-            train_idx, eval_idx = train_test_split(indexes, test_size=1 - train_size, random_state=42)
-            eval_idx, test_idx = train_test_split(eval_idx, test_size=0.5, random_state=42)
+        if stratify:
+            train_idx, eval_idx, _, eval_labs = train_test_split(indexes, labels, stratify=labels, test_size=1-train_size, random_state=40)
+            eval_idx, test_idx = train_test_split(eval_idx, stratify=eval_labs, test_size=0.5, random_state=40)
         else:
-            exit(f'Task: {task} not implemented for creating datsplit')
+            train_idx, eval_idx = train_test_split(indexes, test_size=1 - train_size, random_state=40)
+            eval_idx, test_idx = train_test_split(eval_idx, test_size=0.5, random_state=40)
 
         self.train_idx = train_idx
         self.eval_idx = eval_idx
@@ -133,15 +140,9 @@ class Corpus:
         evalu = list(np.array(self.sequences)[self.eval_idx])
         test = list(np.array(self.sequences)[self.test_idx])
         print(f'Length of data split {len(train)}/{len(evalu)}/{len(test)}')
-
-        return train, evalu, test
-
-    def split_train_eval_test_labels(self):
-        all_labels = self.get_labels()
-        train = list(np.array(all_labels)[self.train_idx])
-        evalu = list(np.array(all_labels)[self.eval_idx])
-        test = list(np.array(all_labels)[self.test_idx])
-
+        print(f'Train Mean LOS: {sum([seq.length_of_stay for seq in train]) / len(train)}')
+        print(f'Eval Mean LOS: {sum([seq.length_of_stay for seq in evalu]) / len(evalu)}')
+        print(f'Test Mean LOS: {sum([seq.length_of_stay for seq in test]) / len(test)}')
         return train, evalu, test
 
     def randomize_sequences(self):
@@ -153,36 +154,39 @@ class Corpus:
             seq.create_position_ids(event_dist)
 
     def prepare_corpus(self, conf=None):
-
-        all_years = {2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021}
-        all_types = {'adm', 'proc', 'diag', 'lab', 'vital', 'apriori'}
-
+        print('Preparing Corpus')
         whole_vocabulary = self.get_vocabulary()
 
         new_sequences = []
-        # Process each sequence
+        # Process sequences
         for seq in self.sequences:
 
             # Remove Unwanted years
-            skip_years = all_years.difference(conf['years'])
-            if seq.ed_start.year in skip_years:
+            if seq.ed_start.year not in conf['years']:
                 continue
 
             # Skip if los is shorter than max_hours
-            if conf['max_hours'] and seq.length_of_stay * 24 < conf['max_hours']:
+            if conf['seq_hours'] and seq.length_of_stay * 24 <= conf['seq_hours']:
                 continue
 
+            # Skip if los is an outlier
+            #if seq.length_of_stay > 100:
+            #    continue
+
             # Remove if sequence longer than max_hours
-            seq.cut_by_hours(conf['max_hours'])
+            seq.cut_by_hours(conf['seq_hours'])
 
             # Remove unwanted types
-            skip_types = all_types.difference(conf['types'])
-            del_indexes = [i for i, t in enumerate(seq.event_types) if t in skip_types]
+            del_indexes = [i for i, t in enumerate(seq.event_types) if t not in conf['types']]
             seq.remove_indexes(del_indexes)
 
             # Change LOS based on max_hours
-            if conf['max_hours']:
-                seq.minus_los(conf['max_hours'])
+            if conf['seq_hours']:
+                seq.minus_los(conf['seq_hours'])
+
+            # Clip LOS
+            if conf['clip_los'] != -1:
+                seq.clip_los(conf['clip_los'])
 
             # Create label
             seq.create_label(conf)
@@ -191,5 +195,9 @@ class Corpus:
 
         self.sequences = new_sequences
 
-        return whole_vocabulary
+        # Create event positions
+        self.create_pos_ids(event_dist=300)
 
+        # Split data into train eval and test
+        self.create_train_evel_test_idx(train_size=0.8, task=conf['task'])
+        return whole_vocabulary

@@ -20,10 +20,15 @@ class Config:
             'out_fold': path + '/Outputs/',
         }
 
+        data_size = 'full'
+        self.file_names = {
+            'patients': f'patients_{data_size}.parquet',
+            'data': f'data_{data_size}.parquet'
+        }
+
         # Experiment settings
         self.workload = conf.get('experiment', 'workload')
         self.task = conf.get('experiment', 'task')
-        self.corpus = conf.get('experiment', 'corpus')
         self.binary_thresh = conf.getint('experiment', 'binary_thresh')
         self.categories = [int(x) for x in conf.get('experiment', 'categories').split(',')]
         self.years = [int(x) for x in conf.get('experiment', 'years').split(',')]
@@ -40,10 +45,6 @@ class Config:
         self.neptune_token_key = conf.get('logging', 'neptune_token_key', fallback=None)
         self.neptune_api_token = get_env(self.neptune_token_key) if self.neptune_token_key is not None else None
         self.experiment_name = conf.get('logging', 'experiment_name')
-
-        # Data transform config
-        self.prepare_parquet = conf.getboolean('extraction', 'prepare_parquet')
-        self.max_sequences = conf.getint('extraction', 'max_sequences')
 
         # Optimization
         self.lr = conf.getfloat('optimization', 'lr')

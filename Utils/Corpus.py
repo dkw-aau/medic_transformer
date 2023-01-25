@@ -10,8 +10,9 @@ from sklearn.model_selection import train_test_split
 
 
 class Corpus:
-    def __init__(self, data_path):
+    def __init__(self, data_path, file_names):
         self.data_path = data_path
+        self.file_names = file_names
         self.vocabulary = None
         self.time_format = '%Y-%m-%d %H:%M:%S'
         self.train_idx = None
@@ -24,8 +25,8 @@ class Corpus:
 
     def create_sequences(self):
         # Load data and hosp files
-        patients = pd.read_parquet(os.path.join(self.data_path, 'patients.parquet'))
-        data = pd.read_parquet(os.path.join(self.data_path, 'data.parquet'))
+        patients = pd.read_parquet(os.path.join(self.data_path, self.file_names['patients']))
+        data = pd.read_parquet(os.path.join(self.data_path, self.file_names['data']))
 
         # Group data by patientid
         grouped_data = data.groupby(by='sequence_id')

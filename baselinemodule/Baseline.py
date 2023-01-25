@@ -25,7 +25,8 @@ class Baseline:
         # Prepare corpus
         print('Loading Corpus')
         self.corpus = Corpus(
-            data_path=args.path['data_fold']
+            data_path=args.path['data_fold'],
+            file_names=args.file_names
         )
         self.vocab = self.corpus.prepare_corpus(self.corpus_conf)
 

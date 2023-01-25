@@ -11,12 +11,13 @@ if __name__ == '__main__':
     args = Config(file_path=config_file)
     set_seeds(42)
 
+    trainer = None
     if args.workload == 'los':
         trainer = LOSTrainer(args)
     elif args.workload == 'mlm':
         trainer = MLMTrainer(args)
     elif args.workload == 'base':
-        baseline = Baseline(args)
+        trainer = Baseline(args)
     else:
         exit(f'Task {args.workload} not Implemented')
 

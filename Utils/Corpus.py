@@ -88,7 +88,7 @@ class Corpus:
 
         return labels
 
-    def create_train_evel_test_idx(self, train_size=0.8, task=None):
+    def create_train_eval_test_idx(self, train_size=0.8):
 
         # Sample indexes
         indexes = list(range(0, len(self.sequences)))
@@ -97,21 +97,20 @@ class Corpus:
         random.shuffle(indexes)
         sequences = list(np.array(self.sequences)[indexes])
 
-        stratify = True
-        labels = [seq.label for seq in sequences]
-        if task == 'real':
-            # Make stratification on bins of 5 days if enough
-            labels = [int(math.floor(los / 5)) for los in labels]
-            min_group = min([labels.count(num) for num in set(labels)])
-            stratify = True if min_group >= 10 else False
+        labels = [seq.los for seq in sequences]
+
+        # Make stratification on bins of 2 days if enough
+        labels = [int(math.floor(los / 2)) for los in labels]
+        min_group = min([labels.count(num) for num in set(labels)])
+        stratify = True if min_group >= 10 else False
 
         # Split data
         if stratify:
-            train_idx, eval_idx, _, eval_labs = train_test_split(indexes, labels, stratify=labels, test_size=1-train_size, random_state=40)
-            eval_idx, test_idx = train_test_split(eval_idx, stratify=eval_labs, test_size=0.5, random_state=40)
+            train_idx, eval_idx, _, eval_labs = train_test_split(indexes, labels, stratify=labels, test_size=1-train_size, random_state=42)
+            eval_idx, test_idx = train_test_split(eval_idx, stratify=eval_labs, test_size=0.5, random_state=42)
         else:
-            train_idx, eval_idx = train_test_split(indexes, test_size=1 - train_size, random_state=40)
-            eval_idx, test_idx = train_test_split(eval_idx, test_size=0.5, random_state=40)
+            train_idx, eval_idx = train_test_split(indexes, test_size=1 - train_size, random_state=42)
+            eval_idx, test_idx = train_test_split(eval_idx, test_size=0.5, random_state=42)
 
         self.train_idx = train_idx
         self.eval_idx = eval_idx
@@ -177,5 +176,5 @@ class Corpus:
         self.create_pos_ids(event_dist=300)
 
         # Split data into train eval and test
-        self.create_train_evel_test_idx(train_size=0.8, task=conf['task'])
+        self.create_train_eval_test_idx(train_size=0.8)
         return whole_vocabulary

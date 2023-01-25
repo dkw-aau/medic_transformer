@@ -13,8 +13,9 @@
 .idea/**/shelf
 .idea
 __pycache__
-Data
-Outputs
+Outputs/*.eps
+Outputs/*.pt
+Outputs/*.png
 
 .env
 

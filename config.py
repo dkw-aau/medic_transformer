@@ -69,14 +69,5 @@ class Config:
         self.initializer_range = conf.getfloat('model_params', 'initializer_range')
         self.features = [str(x) for x in conf.get('model_params', 'features').split(',')]
 
-        # Baseline parameters
-        self.hours = conf.getint('baseline', 'hours')
-        self.strategy = conf.get('baseline', 'strategy')
-        self.imputation = conf.get('baseline', 'imputation')
-        self.scaler = conf.get('baseline', 'scaler')
-        self.feature_select = conf.get('baseline', 'feature_select')
-        self.cls = conf.get('baseline', 'cls')
-        self.use_saved = conf.getboolean('baseline', 'use_saved')
-
     def __repr__(self):
         return f'Task: {self.task}'

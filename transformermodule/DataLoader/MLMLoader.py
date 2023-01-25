@@ -1,6 +1,6 @@
+from Utils.utils import seq_padding, random_mask, limit_seq_length, pad_position
 from torch.utils.data.dataset import Dataset
 import numpy as np
-from Utils.utils import seq_padding, random_mask, limit_seq_length, pad_position
 import torch as th
 
 
@@ -31,10 +31,10 @@ class MLMLoader(Dataset):
         code = seq_padding(code, self.max_len, symbol=self.vocab['PAD'])
         label = seq_padding(label, self.max_len, symbol=-1)
 
-        gender = [seq.gender] * self.max_len
+        sex = [seq.sex] * self.max_len
         age = [seq.age] * self.max_len
 
-        return th.LongTensor(code), th.LongTensor(pos), th.LongTensor(age), th.LongTensor(gender), \
+        return th.LongTensor(code), th.LongTensor(pos), th.LongTensor(age), th.LongTensor(sex), \
                th.LongTensor(mask), th.LongTensor(label), th.LongTensor([idx])
 
     def __len__(self):

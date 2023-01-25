@@ -1,7 +1,7 @@
 from Utils.Corpus import Corpus
 from Utils.Evaluator import Evaluator
 from Utils.utils import load_state_dict
-from .DataLoader.LOSLoader import HistoryLoader
+from .DataLoader.LOSLoader import LOSLoader
 from Utils.EarlyStopping import EarlyStopping
 from .DataLoader.MLMLoader import MLMLoader
 from torch.utils.data import DataLoader
@@ -138,7 +138,7 @@ class Trainer:
                 sequences=data,
                 max_len=self.max_len_seq)
         else:
-            Dset = HistoryLoader(
+            Dset = LOSLoader(
                 token2idx=self.vocab['token2index'],
                 sequences=data,
                 max_len=self.max_len_seq,

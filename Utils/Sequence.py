@@ -59,18 +59,12 @@ class Sequence:
 
     def create_label(self, conf):
         lab = None
-        if 'real' == conf['task']:
-            lab = self.los
-        elif 'binary' == conf['task']:
+        if conf['task'] == 'binary':
             lab = 1 if self.los > conf['binary_thresh'] else 0
-        elif 'category' == conf['task']:
+        elif conf['task'] == 'category':
             lab = bisect(conf['cats'], self.los)
-        elif conf['task'] == 'm30':
-            lab = 1 if self.los else 0
-        elif conf['task'] == 'mlm':
-            lab = None
-        else:
-            exit(f'Task: {conf["task"]} not implemented for sequence')
+        elif conf['task'] in ['real', 'mlm']:
+            lab = self.los
 
         self.label = lab
 

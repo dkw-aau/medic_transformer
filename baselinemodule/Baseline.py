@@ -1,111 +1,96 @@
-from baselinemodule.BaselineDataset import BaselineDataset
-from Utils.utils import load_corpus, save_baseline_data, load_baseline_date
-from sklearn.neural_network import MLPClassifier, MLPRegressor
-import os
-
-from joblib import dump
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, mean_squared_error, mean_absolute_error
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.neural_network import MLPClassifier, MLPRegressor
+from baselinemodule.BaselineDataset import BaselineDataset
 from sklearn.svm import SVC, SVR
+from Utils.Corpus import Corpus
+from joblib import dump
+import os
 
 
 class Baseline:
-    def __init__(
-            self,
-            args):
-
+    def __init__(self, args):
         self.args = args
-        self.cls = args.cls
 
-        self.conf = {
-            'task': 'category',
-            'metrics': ['mae', 'mse'],
-            'binary_thresh': 2,
-            'cats': [2, 7],
-            'years': [2018, 2019, 2020, 2021],
-            'types': ['apriori', 'adm', 'proc', 'vital', 'lab'],  # 'apriori', 'vital', 'diag', 'apriori', 'adm', 'proc', 'lab'
-            'max_hours': 24
+        # Corpus configuration
+        self.corpus_conf = {
+            'task': 'binary',
+            'binary_thresh': args.binary_thresh,
+            'cats': args.categories,
+            'years': args.years,
+            'types': args.types,
+            'seq_hours': args.seq_hours,
+            'clip_los': args.clip_los
         }
-
-        # If use_saved, load previously processed data
-        if self.args.use_saved:
-            print('Using pre-loaded dataset')
-            self.train_x, self.train_y, self.test_x, self.test_y = load_baseline_date(self.args.path['out_fold'], self.conf['task'])
-            print(f'Mean Train: {sum(self.train_y) / len(self.train_y)}')
-            print(f'Mean Evalu: {sum(self.test_y) / len(self.test_y)}')
-            return
-
-        # Load Corpus
+        # Prepare corpus
         print('Loading Corpus')
-        corpus = load_corpus(os.path.join(args.path['data_fold'], args.corpus_name))
-
-        # Prepare Corpus
-        print('Preparing Corpus')
-        _ = corpus.prepare_corpus(
-            self.conf
+        self.corpus = Corpus(
+            data_path=args.path['data_fold']
         )
-        corpus.create_pos_ids(event_dist=300)
-        corpus.create_train_evel_test_idx(task=self.conf['task'], train_size=0.8)
+        self.vocab = self.corpus.prepare_corpus(self.corpus_conf)
 
         print('Creating dataset from sequences')
-        dataset = BaselineDataset(corpus, args, self.conf)
-        self.train_x = dataset.train_x
-        self.train_y = dataset.train_y
-        self.test_x = dataset.test_x
-        self.test_y = dataset.test_y
-
-        # Save baseline data to file
-        save_baseline_data(self.train_x, self.train_y, self.test_x, self.test_y, self.conf['task'], self.args.path['out_fold'])
+        self.dataset = BaselineDataset(self.corpus, self.corpus_conf)
 
     def train(self):
-        if self.conf['task'] in ['binary', 'category']:
-            if self.cls == 'rfc':
-                clf = RandomForestClassifier(random_state=0)
-            elif self.cls == 'nn':
-                clf = MLPClassifier()
-            elif self.cls == 'svc':
-                clf = SVC(probability=True)
-            else:
-                exit(f'Classifier: {self.cls} not implemented')
-        elif self.conf['task'] in ['real']:
-            if self.cls == 'rfc':
-                clf = RandomForestRegressor(random_state=0)
-            elif self.cls == 'nn':
-                clf = MLPRegressor()
-            elif self.cls == 'svc':
-                clf = SVR()
-            else:
-                exit(f'Classifier: {self.cls} not implemented')
+        # For each task
+        for task in ['binary', 'category', 'real']:
+            print('\n------------------------')
+            print(f'Training for task: {task}')
+            print('------------------------\n')
 
-        print('\nTraining Classifier')
-        clf.fit(self.train_x, self.train_y)
+            # Setup train and eval data
+            train_x, train_y, test_x, test_y, clf = [None] * 5
+            if task == 'binary':
+                train_x, train_y = self.dataset.train_x_bin, self.dataset.train_y_bin
+                test_x, test_y = self.dataset.test_x_bin, self.dataset.test_y_bin
+            if task == 'category':
+                train_x, train_y = self.dataset.train_x_cat, self.dataset.train_y_cat
+                test_x, test_y = self.dataset.test_x_cat, self.dataset.test_y_cat
+            if task == 'real':
+                train_x, train_y = self.dataset.train_x_real, self.dataset.train_y_real
+                test_x, test_y = self.dataset.test_x_real, self.dataset.test_y_real
 
-        # Print metrics
-        print('Calculating Metrics')
-        if self.conf['task'] in ['binary', 'category']:
-            if self.conf['task'] == 'binary':
-                probs = clf.predict_proba(self.test_x)[:, 1]
-            else:
-                probs = clf.predict_proba(self.test_x)
-            score = roc_auc_score(self.test_y, probs, multi_class='ovo')
-            print(f'ROC-AUC: {score}')
+            # For each classifier
+            for cls in ['rfc', 'ann', 'svm']:
 
-            preds = clf.predict(self.test_x)
-            score = accuracy_score(self.test_y, preds)
-            print(f'Acc: {score}')
+                # Setup classifier
+                if task in ['binary', 'category']:
+                    if cls == 'rfc':
+                        clf = RandomForestClassifier(random_state=42)
+                    elif cls == 'ann':
+                        clf = MLPClassifier(random_state=42)
+                    elif cls == 'svm':
+                        clf = SVC(probability=True)
 
-            if self.conf['task'] == 'binary':
-                score = f1_score(self.test_y, preds)
-            else:
-                score = f1_score(self.test_y, preds, average='macro')
-            print(f'F1 Score: {score}')
+                elif task == 'real':
+                    if cls == 'rfc':
+                        clf = RandomForestRegressor(random_state=42)
+                    elif cls == 'ann':
+                        clf = MLPRegressor(random_state=42)
+                    elif cls == 'svm':
+                        clf = SVR()
 
-        elif self.conf['task'] in ['real']:
-            preds = clf.predict(self.test_x)
-            mse_score = mean_squared_error(self.test_y, preds)
-            mae_score = mean_absolute_error(self.test_y, preds)
-            print(f'MSE: {mse_score}')
-            print(f'MAE: {mae_score}')
+                print(f'\nTraining Classifier: {cls}')
+                clf.fit(train_x, train_y)
 
-        print('Saving fitted model')
-        dump(clf, os.path.join(self.args.path['out_fold'], f'{self.cls}_{self.conf["task"]}.joblib'))
+                # Print metrics
+                print('Calculating Metrics')
+                if task in ['binary', 'category']:
+                    probs = clf.predict_proba(test_x)[:, 1] if task == 'binary' else clf.predict_proba(test_x)
+                    score = roc_auc_score(test_y, probs, multi_class='ovo')
+                    print(f'{cls} - ROC-AUC: {score}')
+
+                    preds = clf.predict(test_x)
+                    score = f1_score(test_y, preds) if task == 'binary' else f1_score(test_y, preds, average='macro')
+                    print(f'{cls} - F1 Score: {score}')
+
+                elif task in ['real']:
+                    preds = clf.predict(test_x)
+                    mse_score = mean_squared_error(test_y, preds)
+                    mae_score = mean_absolute_error(test_y, preds)
+                    print(f'{cls} - MSE: {mse_score}')
+                    print(f'{cls} - MAE: {mae_score}')
+
+                print('Saving fitted model')
+                dump(clf, os.path.join(self.args.path['out_fold'], f'{cls}_{task}.joblib'))

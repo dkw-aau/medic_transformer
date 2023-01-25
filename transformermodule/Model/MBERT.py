@@ -139,16 +139,16 @@ class MBERT(Bert.modeling.BertPreTrainedModel):
         self.mse_loss = nn.MSELoss()
         self.ce_loss = nn.CrossEntropyLoss()
         self.ne_loss = self.neg_log_loss
+        self.ii_ce_loss = nn.CrossEntropyLoss(ignore_index=-1)
         self.jitter = 1e-6
 
     def forward(self, input_ids, posi_ids=None, age_ids=None, gender_ids=None, targets=None, attention_mask=None):
         # Bert part of the model
         sequence_output, pooled_output = self.mbert(input_ids, posi_ids, age_ids, gender_ids, attention_mask, output_all_encoded_layers=False)
 
-        if self.task == 'mlm':
+        if self.workload == 'mlm':
             preds = self.cls(sequence_output)
-            loss_fct = nn.CrossEntropyLoss(ignore_index=-1)
-            loss = loss_fct(preds.view(-1, self.config.vocab_size), targets.view(-1))
+            loss = self.ii_ce_loss(preds.view(-1, self.config.vocab_size), targets.view(-1))
             return loss
 
         logits = self.dropout(pooled_output)

@@ -4,7 +4,7 @@ from Utils.utils import seq_padding, code2index, limit_seq_length, pad_position
 import torch as th
 
 
-class HistoryLoader(Dataset):
+class LOSLoader(Dataset):
     def __init__(self, token2idx, sequences, max_len, task=None, scaler=None):
         self.vocab = token2idx
         self.max_len = max_len

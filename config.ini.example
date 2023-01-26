@@ -1,8 +1,6 @@
 [experiment]
-; [base, los, mlm]
 workload = los
-;{binary,category,real}
-task = category
+task = binary
 binary_thresh = 2
 categories = 2,7
 years = 2018,2019,2020,2021
@@ -15,8 +13,8 @@ save_model = true
 
 [logging]
 use_logging = true
-experiment_name = category_full
-neptune_project_id = iknowlogic/Medic-Transformer
+experiment_name = binary
+neptune_project_id = project/name
 neptune_token_key = neptune_api_token
 
 [optimization]

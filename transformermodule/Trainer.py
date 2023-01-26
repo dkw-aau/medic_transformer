@@ -1,17 +1,19 @@
-from Utils.Corpus import Corpus
-from Utils.Evaluator import Evaluator
-from Utils.utils import load_state_dict
-from .DataLoader.LOSLoader import LOSLoader
-from Utils.EarlyStopping import EarlyStopping
-from .DataLoader.MLMLoader import MLMLoader
-from torch.utils.data import DataLoader
-from Utils.utils import get_model_config, BertConfig
+import os
+import warnings
+
 import pytorch_pretrained_bert as Bert
+from torch.utils.data import DataLoader
+
+from Utils.Corpus import Corpus
+from Utils.EarlyStopping import EarlyStopping
+from Utils.Evaluator import Evaluator
 from Utils.Scaler import Scaler
 from Utils.logger import Logger
+from Utils.utils import get_model_config, BertConfig
+from Utils.utils import load_state_dict
+from .DataLoader.LOSLoader import LOSLoader
+from .DataLoader.MLMLoader import MLMLoader
 from .Model.MBERT import MBERT
-import warnings
-import os
 
 
 class Trainer:

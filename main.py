@@ -1,7 +1,6 @@
-from baselinemodule.Baseline import Baseline
 from Utils.utils import set_seeds
+from baselinemodule.Baseline import Baseline
 from config import Config
-
 # Primary pipeline for training models on EHR sequences
 from transformermodule.Trainers.LOSTrainer import LOSTrainer
 from transformermodule.Trainers.MLMTrainer import MLMTrainer

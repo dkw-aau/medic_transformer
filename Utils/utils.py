@@ -2,10 +2,9 @@ import os
 import pickle
 import random
 import time
-import pytorch_pretrained_bert as Bert
 
-import numpy as np
 import pandas as pd
+import pytorch_pretrained_bert as Bert
 import torch as th
 
 
@@ -117,19 +116,6 @@ def get_model_config(vocab, args):
     }
 
 
-def load_model(path, model):
-    # load pretrained model and update weights
-    pretrained_dict = th.load(path)
-    model_dict = model.state_dict()
-    # 1. filter out unnecessary keys
-    pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
-    # 2. overwrite entries in the existing state dict
-    model_dict.update(pretrained_dict)
-    # 3. load the new state dict
-    model.load_state_dict(model_dict)
-    return model
-
-
 def code2index(tokens, token2idx, mask_token=None):
     output_tokens = []
     for i, token in enumerate(tokens):
@@ -179,17 +165,6 @@ def limit_seq_length(seq, max_len):
         return seq[:max_len]
     else:
         return seq
-
-
-def index_seg(tokens, apriori_len):
-    seg = [0] * apriori_len + [1] * (len(tokens) - apriori_len)
-
-    return seg
-
-
-def position_idx(tokens):
-    pos = [x for x in range(0, len(tokens))]
-    return pos
 
 
 def seq_padding(tokens, max_len, token2idx=None, symbol=None, unkown=True):

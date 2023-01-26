@@ -27,7 +27,6 @@ Currently, CSV and PARQUET formats are supported.
 * `hosp_start (datetime)`- Start date and time of the hospitalization
 * `los (float)`- Length of stay in days
 
-
 `data.csv` specifies the EHR of a patient modelled as individual tokenized medical events
 
 | token | token_orig | event_time | event_type | event_value | sequence_id |
@@ -63,7 +62,6 @@ are described first, subsequently the ones rarely changed:
 * seq_hours (int) - Hours of sequences to use for classification
 * load_mlm (boolean) - Load M-BERT using a pre-trained model
 * save_model (boolean) - Save the trained model
-
 
 #### Rarely changed
 * years (list) - Years of data to include

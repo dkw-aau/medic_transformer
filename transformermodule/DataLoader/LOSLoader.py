@@ -1,7 +1,8 @@
 import numpy as np
-from torch.utils.data.dataset import Dataset
-from Utils.utils import seq_padding, code2index, limit_seq_length, pad_position
 import torch as th
+from torch.utils.data.dataset import Dataset
+
+from Utils.utils import seq_padding, code2index, limit_seq_length, pad_position
 
 
 class LOSLoader(Dataset):

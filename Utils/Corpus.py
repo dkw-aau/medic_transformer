@@ -4,9 +4,9 @@ import random
 
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 
 from Utils.Sequence import Sequence
-from sklearn.model_selection import train_test_split
 
 
 class Corpus:
@@ -25,8 +25,14 @@ class Corpus:
 
     def create_sequences(self):
         # Load data and hosp files
-        patients = pd.read_parquet(os.path.join(self.data_path, self.file_names['patients']))
-        data = pd.read_parquet(os.path.join(self.data_path, self.file_names['data']))
+        if 'parquet' in self.file_names['patients']:
+            patients = pd.read_parquet(os.path.join(self.data_path, self.file_names['patients']))
+        else:
+            patients = pd.read_csv(os.path.join(self.data_path, self.file_names['patients']))
+        if 'parquet' in self.file_names['data']:
+            data = pd.read_parquet(os.path.join(self.data_path, self.file_names['data']))
+        else:
+            data = pd.read_csv(os.path.join(self.data_path, self.file_names['data']))
 
         # Group data by patientid
         grouped_data = data.groupby(by='sequence_id')
@@ -146,10 +152,6 @@ class Corpus:
             # Skip if los is shorter than max_hours
             if conf['seq_hours'] and seq.los * 24 <= conf['seq_hours']:
                 continue
-
-            # Skip if los is an outlier
-            #if seq.length_of_stay > 100:
-            #    continue
 
             # Remove if sequence longer than max_hours
             seq.cut_by_hours(conf['seq_hours'])

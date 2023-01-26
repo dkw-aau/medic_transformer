@@ -1,5 +1,6 @@
-from transformermodule.Trainer import Trainer
 from tqdm import tqdm
+
+from transformermodule.Trainer import Trainer
 
 
 class MLMTrainer(Trainer):

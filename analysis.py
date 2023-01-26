@@ -1,16 +1,13 @@
-import math
-import os
-import time
-from bisect import bisect
 import datetime
+from bisect import bisect
+
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
-from Utils.utils import load_corpus
-from config import Config
-from sklearn.preprocessing import MinMaxScaler, PowerTransformer
-from sklearn.preprocessing import QuantileTransformer
-import matplotlib.dates as mdates
 import seaborn as sns
+
+from Utils.Corpus import Corpus
+from config import Config
 
 
 def time_names():
@@ -25,9 +22,9 @@ def time_names():
 
 
 def length_og_stay_plot(corpus, cutoff_days, file_name='los_bins'):
-    losses = [seq.length_of_stay for seq in corpus.sequences]
-    #out_liers = [seq.length_of_stay for seq in corpus.sequences if seq.length_of_stay >= cutoff_days]
-    #zero_time = [seq.length_of_stay for seq in corpus.sequences if seq.length_of_stay == 0]
+    losses = [seq.los for seq in corpus.sequences]
+    #out_liers = [seq.los for seq in corpus.sequences if seq.los >= cutoff_days]
+    #zero_time = [seq.los for seq in corpus.sequences if seq.los == 0]
 
 
     #print(f'With a cutoff of {cutoff_days} days we get'
@@ -36,18 +33,18 @@ def length_og_stay_plot(corpus, cutoff_days, file_name='los_bins'):
 
     sns.set_theme()
 
-    bins = np.arange(0, 16, 1)
+    bins = np.arange(0, 31, 1)
 
     fig, ax = plt.subplots()
     _, bins, patches = plt.hist(np.clip(losses, bins[0], bins[-1]), density=True, bins=bins)
 
-    xlabels = [str(int(x)) for x in bins[1:]]
+    xlabels = [str(int(x)) for x in bins[2::2]]
     xlabels[-1] += '+'
 
     N_labels = len(xlabels)
-    plt.xlim([0, 16])
-    x_locations = np.arange(N_labels) + 0.5
-    x_locations[-1] += 0.2
+    plt.xlim([0, 31])
+    x_locations = np.arange(N_labels) * 2 + 1.5
+    x_locations[-1] += 0.5
     plt.xticks(x_locations)
     ax.set_xticklabels(xlabels)
 
@@ -62,9 +59,10 @@ def length_og_stay_plot(corpus, cutoff_days, file_name='los_bins'):
     plt.savefig(f'{args.path["out_fold"]}/{file_name}.eps', format='eps')
 
 
-def length_og_stay_category_plot(corpus, categories, label_names, file_name='los_cat'):
+def length_og_stay_category_plot(corpus, label_names, file_name='los_cat'):
     bins = {}
-    inliers = [bisect(categories, seq.length_of_stay) for seq in corpus.sequences]
+    categories = [2, 7, 14, 30]
+    inliers = [bisect(categories, seq.los) for seq in corpus.sequences]
     for i in range(0, len(categories) + 1):
         bins[i] = inliers.count(i)
 
@@ -302,43 +300,40 @@ if __name__ == '__main__':
         file_path=config_file
     )
 
-    # Load Corpus
+    # Corpus configuration
     conf = {
         'task': 'binary',
-        'metric': 'acc',
-        'binary_thresh': 2,
-        'cats': [1, 7],
-        'years': [2018, 2019, 2020, 2021],
-        'types': ['apriori', 'adm', 'proc', 'lab', 'vital', 'diag'],
-        'max_hours': 24
+        'binary_thresh': args.binary_thresh,
+        'cats': args.categories,
+        'years': args.years,
+        'types': args.types,
+        'seq_hours': args.seq_hours,
+        'clip_los': args.clip_los
     }
-
-    # Load corpus
+    # Prepare corpus
     print('Loading Corpus')
-    corpus = load_corpus(os.path.join(args.path['data_fold'], args.corpus_name))
-
-    print('Preparing Corpus')
-    corpus.prepare_corpus(
-        conf
+    corpus = Corpus(
+        data_path=args.path['data_fold'],
+        file_names=args.file_names
     )
-    corpus.create_pos_ids(event_dist=300)
+    vocab = corpus.prepare_corpus(conf)
 
     # Plot a sequence
     #dates, tokens = time_names()
     #plot_sequence(corpus, 0, tokens, dates)
 
     # Length of stay
-    length_og_stay_plot(corpus, cutoff_days=14, file_name=f'los_bins_{conf["max_hours"]}')
+    length_og_stay_plot(corpus, cutoff_days=14, file_name=f'los_bins_{conf["seq_hours"]}')
 
-    length_og_stay_category_plot(corpus, categories=[2, 7], label_names=['<2', '2-7', '>7'], file_name=f'los_cat_{conf["max_hours"]}_hours')
+    length_og_stay_category_plot(corpus, label_names=['<2', '2-7', '7-14', '14-30', '30+'], file_name=f'los_cat_{conf["seq_hours"]}_hours')
 
     # Sequence lengths
-    hist_seq_len(corpus, bins=15, cutoff_len=256, file_name=f'seq_len_{conf["max_hours"]}')
+    hist_seq_len(corpus, bins=15, cutoff_len=256, file_name=f'seq_len_{conf["seq_hours"]}')
 
     # Token distribution
     token_distribution(corpus, bins=200, cutoff_min=0, cutoff_max=20000, file_name='token_dist_all')
 
-    distinct_token_types(corpus, file_name=f'distinct_token_types_{conf["max_hours"]}', event_types=conf["types"])
+    distinct_token_types(corpus, file_name=f'distinct_token_types_{conf["seq_hours"]}', event_types=conf["types"])
 
     # TODO: Investigate Apriori
     # Are there any apriori concepts that are not seen 200 times?
@@ -346,12 +341,12 @@ if __name__ == '__main__':
     apriori_distribution(corpus)
 
     # Token type distribution over time
-    token_type_time_dist(corpus, file_name=f'tok_typ_dist_{conf["max_hours"]}', event_types=conf["types"])
+    token_type_time_dist(corpus, file_name=f'tok_typ_dist_{conf["seq_hours"]}', event_types=conf["types"])
 
     # Token type distribution plot
-    type_distribution(corpus, file_name=f'event_type_dist_{conf["max_hours"]}', event_types=conf["types"])
+    type_distribution(corpus, file_name=f'event_type_dist_{conf["seq_hours"]}', event_types=conf["types"])
 
-    position_distribution(corpus, file_name=f'pos_dist_{conf["max_hours"]}', event_types=conf["types"])
+    position_distribution(corpus, file_name=f'pos_dist_{conf["seq_hours"]}', event_types=conf["types"])
     exit()
 
     # TODO: Analyze the Aleatoric uncertainty of the problem by finding similar looking sequences

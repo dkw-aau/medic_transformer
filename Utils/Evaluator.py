@@ -1,8 +1,7 @@
-from torchmetrics.classification import AUROC
-from torchmetrics.functional.classification import multiclass_f1_score, binary_f1_score
 import numpy as np
 import torch as th
-import random
+from torchmetrics.classification import AUROC
+from torchmetrics.functional.classification import multiclass_f1_score, binary_f1_score
 
 
 class Evaluator:

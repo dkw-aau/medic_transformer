@@ -1,5 +1,3 @@
-import math
-
 import neptune.new as neptune
 
 
@@ -37,17 +35,11 @@ class Logger:
         if self.run:
             self.run.stop()
 
-    def log_running(self):
-        return True if self.run else False
-
     def info(self, s):
         print(s)
 
     def log_value(self, name, value):
         self.run[name] = value
-
-    def log_sequence(self, name, value):
-        self.run[name].log(value)
 
     def log_values(self, metrics: dict, mode: str):
         for name, value in metrics.items():
@@ -63,13 +55,4 @@ class Logger:
             metric_string += f'{name} {round(value, 3)}, '
         print(metric_string)
 
-    def metric2str(self, metric_dict):
-        out = "[Evaluation metric]"
-        for mode, score_dict in metric_dict.items():
-            out += f"\tMode:{mode}, "
-            for metric, score in score_dict.items():
-                out += f"{metric}: {score:.4f}; "
-        return out
-                
-    def feature_info(self, s):
-        print('[Feature Transformation] ' + s)
+

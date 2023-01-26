@@ -1,7 +1,9 @@
-from transformermodule.Trainer import Trainer
-from tqdm import tqdm
-import torch as th
 import time
+
+import torch as th
+from tqdm import tqdm
+
+from transformermodule.Trainer import Trainer
 
 
 class LOSTrainer(Trainer):
@@ -38,7 +40,6 @@ class LOSTrainer(Trainer):
         self.logger.log_value('test_loss', test_loss)
         self.logger.log_values(test_metrics, 'test')
 
-        self.logger.stop_log()
 
     def epoch(self, e):
         self.model.train()

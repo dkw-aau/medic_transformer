@@ -1,7 +1,8 @@
-from Utils.utils import seq_padding, random_mask, limit_seq_length, pad_position
-from torch.utils.data.dataset import Dataset
 import numpy as np
 import torch as th
+from torch.utils.data.dataset import Dataset
+
+from Utils.utils import seq_padding, random_mask, limit_seq_length, pad_position
 
 
 class MLMLoader(Dataset):

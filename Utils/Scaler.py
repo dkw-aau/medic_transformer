@@ -1,5 +1,5 @@
-from sklearn.preprocessing import PowerTransformer
 import numpy as np
+from sklearn.preprocessing import PowerTransformer
 
 
 class Scaler(object):

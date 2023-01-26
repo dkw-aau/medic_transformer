@@ -1,8 +1,8 @@
+import numpy as np
+import pytorch_pretrained_bert as Bert
 import torch as th
 import torch.nn as nn
 from torch.nn.functional import sigmoid
-import pytorch_pretrained_bert as Bert
-import numpy as np
 
 
 class BertEmbeddings(nn.Module):

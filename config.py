@@ -1,6 +1,7 @@
 import configparser
-from decouple import config as get_env
 import os
+
+from decouple import config as get_env
 
 
 class Config:
@@ -20,7 +21,7 @@ class Config:
             'out_fold': path + '/Outputs/',
         }
 
-        data_size = 'full'
+        data_size = 'small'
         self.file_names = {
             'patients': f'patients_{data_size}.parquet',
             'data': f'data_{data_size}.parquet'

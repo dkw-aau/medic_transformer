@@ -1,1 +1,1 @@
-# Create a Readme for this folder
+# Output folder

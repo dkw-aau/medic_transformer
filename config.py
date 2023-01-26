@@ -21,10 +21,9 @@ class Config:
             'out_fold': path + '/Outputs/',
         }
 
-        data_size = 'small'
         self.file_names = {
-            'patients': f'patients_{data_size}.parquet',
-            'data': f'data_{data_size}.parquet'
+            'patients': f'patients.parquet',
+            'data': f'data.parquet'
         }
 
         # Experiment settings

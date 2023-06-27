@@ -90,3 +90,16 @@ are described first, subsequently the ones rarely changed:
   * relu
 * initializer_range (float) - Initializer range of parameter weight initialization
 * features (list) - Embedding features to include in model
+* 
+
+If you use M-BERT in a scientific publication, we would like a citation:
+```
+@inproceedings{hansen2023patient,
+  title={Patient Event Sequences for Predicting Hospitalization Length of Stay},
+  author={Hansen, Emil Riis and Nielsen, Thomas Dyhre and Mulvad, Thomas and Strausholm, Mads Nibe and Sagi, Tomer and Hose, Katja},
+  booktitle={International Conference on Artificial Intelligence in Medicine},
+  pages={51--56},
+  year={2023},
+  organization={Springer}
+}
+```
